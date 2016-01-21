@@ -43,8 +43,8 @@ unsigned char charBuf[CHARBUFLEN];
 
 void setup()
 {
-  Serial.begin(9600);
-  Serial.println("potato!");
+  Serial.begin(250000);
+  Serial.println("Serial Initialized!");
   
   pinMode(EN_PIN, OUTPUT);
   pinMode(TX, OUTPUT);
@@ -168,10 +168,10 @@ void delayWhileReading(long msToDelay){
   while(micros() - startTime < msToDelay * 1000){ //While time elapsed since start of function is less than prescribed time
     
     if(digitalRead(EN_PIN) == LOW){ //Look to see if EN_PIN is low, as that means a message is incoming
-      digitalWrite(LED, LOW);
+      //digitalWrite(LED, LOW);
       incomingMsg = 1;
     }else{
-      digitalWrite(LED, HIGH);
+      //digitalWrite(LED, HIGH);
       incomingMsg = 0;
     }
 
@@ -189,11 +189,10 @@ void delayWhileReading(long msToDelay){
       }
     }
 
-    delayMicroseconds(7); //7 uSec with LEDs, 11 uSec without works pretty well    
+    delayMicroseconds(11); //7 uSec with LEDs, 11 uSec without works pretty well    
   }
-  digitalWrite(LED, LOW);
-
-
+  //digitalWrite(LED, LOW);
+  
 //This next part is stupidly complicated and I can't quite explain how it works in the time I have right now
 //It takes msgBuf and tries to parse out a series of times spent high/low into a string of characters
 
@@ -244,6 +243,7 @@ void delayWhileReading(long msToDelay){
     msgBuf[i]=0; //Clear buffer
   }
   
+  printAndClearCharBuf();
   Serial.println();
   delay(5);
 }
@@ -252,8 +252,8 @@ void printAndClearCharBuf(){
   ///// Print and clear charBuf
   
   for(int i = 0; i < CHARBUFLEN; i++){
-    Serial.print("erwrethr");
-    //Serial.print(charBuf[i], DEC);
+    //Serial.print("erwrethr");
+    Serial.print(charBuf[i],DEC);
     Serial.print('\t');
     charBuf[i] = 0; //Clear buffer
   }
