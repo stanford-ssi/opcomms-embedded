@@ -201,8 +201,9 @@ void delayWhileReading(long msToDelay){
   bool isActive = 0;
   unsigned char workingChar = 0;
 
+  //iterate over msgBuf
   for(int i = 0; i < BUFLEN; i++){
-    msgBuf[i] = msgBuf[i]/2;
+    msgBuf[i] = msgBuf[i]/2; //two or three samples are taken for each bit low or high; this condenses them
 
     
     if(msgBuf[i] < 0){
