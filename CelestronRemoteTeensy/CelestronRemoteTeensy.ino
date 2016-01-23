@@ -16,6 +16,8 @@
 //#define BITTIME 45 //Time to transmit a bit, in microseconds, Arduino version 
                    //This should really be closer to 50 uSec, but the transmission execution time on a 16MHz Arduino chews up ~5 uSec
 
+#define POSMAX 16777216 //2^24; all angles are represented as 24 bit integers, and dividing by POSMAX converts to a fraction of a complete rotation
+
 /******** IMPORTANT ********/
 //If Serial seems to be breaking, adjust BITTIIME. The communication expects to run at 19200 baud, and depending on your microcontroller
 //the time required to initiate a transition may eat into the ~50 uSec needed for each pulse
@@ -54,11 +56,14 @@ void setup()
   
   digitalWrite(EN_PIN, HIGH);
   digitalWrite(TX, HIGH);
-  
+
+  randomSeed(analogRead(0));
 
 /*******************************************************************************/
 //Initialization code above this line is required for proper startup
 //Code below is optional
+
+//Startup LED blink
 
   digitalWrite(LED, HIGH);
   delay(1000);
@@ -72,6 +77,15 @@ void setup()
   delay(200);
   digitalWrite(LED,LOW);
   delay(200);
+
+  long azmTarget = random(POSMAX);
+  long altTarget = random(POSMAX);
+  Serial.print("-->");
+  Serial.print(azmTarget);
+  Serial.print(' ');
+  Serial.println(altTarget);
+
+  celestronGoToPos(azmTarget,altTarget); //AZM, ALT
 
   /*celestronDriveMotor(UP,9);
   delay(2000);
@@ -80,14 +94,10 @@ void setup()
 
 void loop() // run over and over
 {
-  celestronDriveMotor(RIGHT,9);
-  delay(1000);
-  celestronStopCmd();
-  celestronGetPos(AZM);
-  celestronGetPos(ALT);
-  delay(3000);
 }
 
+
+//Call before beginning a command to configure pins
 void beginCmd(){ //Reconfigure pins to prepare to transmit
   pinMode(EN_PIN, OUTPUT);
   pinMode(TX, OUTPUT);
@@ -95,11 +105,15 @@ void beginCmd(){ //Reconfigure pins to prepare to transmit
   digitalWrite(TX, HIGH);
 }
 
+
+//Call when ending a command to configure pins
 void endCmd(){
   pinMode(EN_PIN, INPUT_PULLUP); //Hi-Z pin, but pull up - EN is normally high and only pulled low when receiving (Celestron pulls low) or transmitting
   pinMode(TX, INPUT_PULLUP); //Hi-Z pin, but pull up - Same as above
 }
 
+
+//Send a character to Celestron
 void celestronWrite(char c){
 
   //To begin sending a character, send one low bit
@@ -123,6 +137,9 @@ void celestronWrite(char c){
   //Character looks like this: 0XXXXXXXX1
 }
 
+
+//Send command to drive motors in specified direction at specified speed
+//9 is relatively fast (2.78 +/- 0.01 degrees/sec), while 1 is unfathomably slow
 void celestronDriveMotor(char dir, int spd){
   char axis = (dir - NEG) / 2; //convert direction to axis variable
   char realdir = dir - (2 *axis); //convert "direction" constant to actual value needed by Celestron
@@ -143,7 +160,9 @@ void celestronDriveMotor(char dir, int spd){
   
 }
 
-void celestronGetPos(char axis){
+
+//Command to get angular position on the specified axis
+long celestronGetPos(char axis){
   unsigned char lastChar = 239 - axis; //Weird checksum character; command won't be accepted without it
 
 //This is the list of characters to trigger a position query on the axis specified by "axis" - please don't touch
@@ -157,13 +176,93 @@ void celestronGetPos(char axis){
   celestronWrite(lastChar);
   endCmd();
 
-  celestronListenForResponse(20); //Spend 20 milliseconds paused while reading back the queried position
+  return celestronListenForResponse(20); //Spend 20 milliseconds paused while reading back the queried position
 }
 
-void celestronStopCmd(){ //Stop motion in both axes and wait 500 mSec for them to come to a halt
+void celestronStopCmd(){ //Stop motion in both axes and wait 600 mSec for them to come to a halt
   celestronDriveMotor(LEFT,0);
   celestronDriveMotor(UP,0);
   delay(600);
+}
+
+void celestronGoToPos(long azmPos, long altPos){
+  long currAzmPos = celestronGetPos(AZM);
+  long currAltPos = celestronGetPos(ALT);
+  long errorAzm = calcSmallestError(currAzmPos, azmPos);
+  long errorAlt = calcSmallestError(currAltPos, altPos);
+
+  int goodAlign = 0;
+  while(goodAlign < 2){
+    goodAlign = 0;
+    currAzmPos = celestronGetPos(AZM);
+    currAltPos = celestronGetPos(ALT);
+    errorAzm = calcSmallestError(currAzmPos, azmPos);
+    errorAlt = calcSmallestError(currAltPos, altPos);
+    Serial.print('@');
+    Serial.print(currAzmPos);
+    Serial.print(',');
+    Serial.println(currAltPos);
+    Serial.print("Error: ");
+    Serial.print(errorAzm);
+    Serial.print('\t');
+    Serial.println(errorAlt);
+    
+    if(errorAzm < -50000){
+      celestronDriveMotor(LEFT, 9);
+    }else if(errorAzm > 50000){
+      celestronDriveMotor(RIGHT, 9);
+    }else if(errorAzm < -1000){
+      celestronDriveMotor(LEFT, 4);
+    }else if(errorAzm > 1000){
+      celestronDriveMotor(RIGHT, 4);
+    }else if(errorAzm < -10){
+      celestronDriveMotor(LEFT, 3);
+    }else if(errorAzm > 10){
+      celestronDriveMotor(RIGHT, 3);
+    }else{
+      celestronDriveMotor(RIGHT, 0);
+      goodAlign++;
+    }
+
+    if(errorAlt < -50000){
+      celestronDriveMotor(DOWN, 9);
+    }else if(errorAlt > 50000){
+      celestronDriveMotor(UP, 9);
+    }else if(errorAlt < -1000){
+      celestronDriveMotor(DOWN, 4);
+    }else if(errorAlt > 1000){
+      celestronDriveMotor(UP, 4);
+    }else if(errorAlt < -10){
+      celestronDriveMotor(DOWN, 3);
+    }else if(errorAlt > 10){
+      celestronDriveMotor(UP, 3);
+    }else{
+      celestronDriveMotor(DOWN, 0);
+      goodAlign++;
+    }
+    
+    Serial.println();
+    delay(100);
+  }
+  
+  Serial.println("Aligned!");
+}
+
+//Figures out whether going in the normal direction or rolling over is shorter
+long calcSmallestError(long currentPos, long targetPos){
+
+  if(currentPos == targetPos) return 0; //DON'T MOVE
+  
+  long upDistance = (currentPos < targetPos) ? targetPos - currentPos : POSMAX - (currentPos-targetPos); //If target is greater than current, going up is easy; otherwise you have to wrap around
+  long downDistance = (currentPos > targetPos) ? targetPos - currentPos : (targetPos-currentPos) - POSMAX; //If target is lesser than current, going down is easy; otherwise you have to wrap around
+  
+  /*Serial.print(upDistance);
+  Serial.print('\t');
+  Serial.print(downDistance);
+  Serial.print('\t');
+  Serial.println(upDistance < abs(downDistance));*/
+  
+  return (upDistance < abs(downDistance)) ? upDistance : downDistance;
 }
 
 long celestronListenForResponse(long msToDelay){
@@ -216,7 +315,8 @@ long celestronListenForResponse(long msToDelay){
       }
     }
 
-    delayMicroseconds(11); //Arduino: 7 uSec with LEDs, 11 uSec without works pretty well    
+    delayMicroseconds(11);  //Teensy: 11uSec is bae. Don't touch
+                            //Arduino: 7 uSec with LEDs, 11 uSec without works pretty well    
   }
 
   /*for(int i = 0; i< BUFLEN; i++){
@@ -227,7 +327,7 @@ long celestronListenForResponse(long msToDelay){
   
   //digitalWrite(LED, LOW);
   
-//This next part is stupidly complicated and I can't quite explain how it works in the time I have right now
+//This next part is stupidly complicated and I can't quite explain how it works
 //It takes msgBuf and tries to parse out a series of times spent high/low into a string of characters
 
   int N = -1;
@@ -277,10 +377,10 @@ long celestronListenForResponse(long msToDelay){
   }
 
   long fullPosition = (long(charBuf[5]) << 16) | (long(charBuf[6]) << 8) | charBuf[7];
-  Serial.println(fullPosition);
+  //Serial.println(fullPosition);
   
   printAndClearCharBuf(false);
-  Serial.println();
+  //Serial.println();
   delay(5);
   
   return fullPosition;
