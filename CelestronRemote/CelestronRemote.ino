@@ -12,7 +12,8 @@
 #define EN_PIN 4 //Additional line that both Celestron and the board pull down when they are sending data over the TX/RX line
 #define LED 13 //LED pin
 
-#define BITTIME 45 //Time to transmit a bit, in microseconds. 
+#define BITTIME 50 //Time to transmit a bit, in microseconds, Teensy version 
+//#define BITTIME 45 //Time to transmit a bit, in microseconds, Arduino version 
                    //This should really be closer to 50 uSec, but the transmission execution time on a 16MHz Arduino chews up ~5 uSec
 
 /******** IMPORTANT ********/
@@ -45,7 +46,7 @@ void setup()
 {
   Serial.begin(250000);
   Serial.println("Serial Initialized!");
-  
+
   pinMode(EN_PIN, OUTPUT);
   pinMode(TX, OUTPUT);
   pinMode(RX, INPUT_PULLUP);
@@ -53,8 +54,18 @@ void setup()
   
   digitalWrite(EN_PIN, HIGH);
   digitalWrite(TX, HIGH);
-  digitalWrite(LED, LOW);
+  digitalWrite(LED, HIGH);
   delay(1000);
+  digitalWrite(LED,LOW);
+  delay(200);
+  digitalWrite(LED, HIGH);
+  delay(200);
+  digitalWrite(LED,LOW);
+  delay(200);
+  digitalWrite(LED, HIGH);
+  delay(200);
+  digitalWrite(LED,LOW);
+  delay(200);
 
 /*******************************************************************************/
 //Initialization code above this line is required for proper startup
