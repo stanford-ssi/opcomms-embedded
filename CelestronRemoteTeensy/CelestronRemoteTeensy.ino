@@ -54,6 +54,12 @@ void setup()
   
   digitalWrite(EN_PIN, HIGH);
   digitalWrite(TX, HIGH);
+  
+
+/*******************************************************************************/
+//Initialization code above this line is required for proper startup
+//Code below is optional
+
   digitalWrite(LED, HIGH);
   delay(1000);
   digitalWrite(LED,LOW);
@@ -67,25 +73,18 @@ void setup()
   digitalWrite(LED,LOW);
   delay(200);
 
-/*******************************************************************************/
-//Initialization code above this line is required for proper startup
-//Code below is optional
-
-  /*celestronMoveCmd(UP,9);
+  /*celestronDriveMotor(UP,9);
   delay(2000);
   celestronStopCmd();*/
 }
 
 void loop() // run over and over
 {
-  celestronMoveCmd(RIGHT,9);
+  celestronDriveMotor(RIGHT,9);
   delay(1000);
   celestronStopCmd();
-  celestronPosCmd(AZM);
-  celestronPosCmd(AZM);
-  celestronPosCmd(AZM);
-  celestronPosCmd(AZM);
-  celestronPosCmd(AZM);
+  celestronGetPos(AZM);
+  celestronGetPos(ALT);
   delay(3000);
 }
 
@@ -124,7 +123,7 @@ void celestronWrite(char c){
   //Character looks like this: 0XXXXXXXX1
 }
 
-void celestronMoveCmd(char dir, int spd){
+void celestronDriveMotor(char dir, int spd){
   char axis = (dir - NEG) / 2; //convert direction to axis variable
   char realdir = dir - (2 *axis); //convert "direction" constant to actual value needed by Celestron
 
@@ -144,7 +143,7 @@ void celestronMoveCmd(char dir, int spd){
   
 }
 
-void celestronPosCmd(char axis){
+void celestronGetPos(char axis){
   unsigned char lastChar = 239 - axis; //Weird checksum character; command won't be accepted without it
 
 //This is the list of characters to trigger a position query on the axis specified by "axis" - please don't touch
@@ -158,16 +157,16 @@ void celestronPosCmd(char axis){
   celestronWrite(lastChar);
   endCmd();
 
-  delayWhileReading(20); //Spend 20 milliseconds paused while reading back the queried position
+  celestronListenForResponse(20); //Spend 20 milliseconds paused while reading back the queried position
 }
 
 void celestronStopCmd(){ //Stop motion in both axes and wait 500 mSec for them to come to a halt
-  celestronMoveCmd(LEFT,0);
-  celestronMoveCmd(UP,0);
-  delay(500);
+  celestronDriveMotor(LEFT,0);
+  celestronDriveMotor(UP,0);
+  delay(600);
 }
 
-void delayWhileReading(long msToDelay){
+long celestronListenForResponse(long msToDelay){
   /*for(int i = 0; i<10000; i++){
     Serial.print(digitalRead(EN_PIN));
     Serial.print(" x");
@@ -184,14 +183,14 @@ void delayWhileReading(long msToDelay){
   bool incomingMsg = 0;
   bool lastState = 0;
 
-  while(micros() - startTime < msToDelay * 1000){
+  /*while(micros() - startTime < msToDelay * 1000){
     Serial.print(digitalRead(EN_PIN));
     Serial.print(' ');
     Serial.print(digitalRead(RX));
     Serial.print('\t');
     delayMicroseconds(5);
   }
-  Serial.println();
+  Serial.println();*/
   
   while(micros() - startTime < msToDelay * 1000){ //While time elapsed since start of function is less than prescribed time
     
@@ -217,11 +216,11 @@ void delayWhileReading(long msToDelay){
       }
     }
 
-    delayMicroseconds(10); //Arduino: 7 uSec with LEDs, 11 uSec without works pretty well    
+    delayMicroseconds(11); //Arduino: 7 uSec with LEDs, 11 uSec without works pretty well    
   }
 
   /*for(int i = 0; i< BUFLEN; i++){
-    Serial.print(msgBuf[i], DEC);
+    Serial.print(msgBuf[i]/4, DEC);
     Serial.print('\t');
   }
   Serial.println();*/
@@ -238,7 +237,7 @@ void delayWhileReading(long msToDelay){
 
   //iterate over msgBuf
   for(int i = 0; i < BUFLEN; i++){
-    msgBuf[i] = msgBuf[i]/2; //two or three samples are taken for each bit low or high; this condenses them
+    msgBuf[i] = msgBuf[i]/4; //two or three samples are taken for each bit low or high; this condenses them
 
     
     if(msgBuf[i] < 0){
@@ -276,18 +275,25 @@ void delayWhileReading(long msToDelay){
   for(int i = 0; i < BUFLEN; i++){  
     msgBuf[i]=0; //Clear buffer
   }
+
+  long fullPosition = (long(charBuf[5]) << 16) | (long(charBuf[6]) << 8) | charBuf[7];
+  Serial.println(fullPosition);
   
-  printAndClearCharBuf();
+  printAndClearCharBuf(false);
   Serial.println();
   delay(5);
+  
+  return fullPosition;
 }
 
-void printAndClearCharBuf(){
+void printAndClearCharBuf(bool shouldPrint){
   ///// Print and clear charBuf
   
   for(int i = 0; i < CHARBUFLEN; i++){
-    Serial.print(charBuf[i],DEC);
-    Serial.print('\t');
+    if(shouldPrint){
+      Serial.print(charBuf[i],DEC);
+      Serial.print('\t');
+    }
     charBuf[i] = 0; //Clear buffer
   }
 
