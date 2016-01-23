@@ -39,7 +39,7 @@
 #define BUFLEN 64
 #define CHARBUFLEN 10
 
-char msgBuf[BUFLEN];
+signed char msgBuf[BUFLEN];
 unsigned char charBuf[CHARBUFLEN];
 
 void setup()
@@ -71,9 +71,9 @@ void setup()
 //Initialization code above this line is required for proper startup
 //Code below is optional
 
-  celestronMoveCmd(UP,9);
+  /*celestronMoveCmd(UP,9);
   delay(2000);
-  celestronStopCmd();
+  celestronStopCmd();*/
 }
 
 void loop() // run over and over
@@ -168,6 +168,14 @@ void celestronStopCmd(){ //Stop motion in both axes and wait 500 mSec for them t
 }
 
 void delayWhileReading(long msToDelay){
+  /*for(int i = 0; i<10000; i++){
+    Serial.print(digitalRead(EN_PIN));
+    Serial.print(" x");
+    Serial.print(digitalRead(RX));
+    Serial.print(' ');
+    delayMicroseconds(1);
+  }*/
+  
   int bufIndex = 0;
   
   digitalWrite(LED, HIGH);
@@ -175,6 +183,15 @@ void delayWhileReading(long msToDelay){
   
   bool incomingMsg = 0;
   bool lastState = 0;
+
+  while(micros() - startTime < msToDelay * 1000){
+    Serial.print(digitalRead(EN_PIN));
+    Serial.print(' ');
+    Serial.print(digitalRead(RX));
+    Serial.print('\t');
+    delayMicroseconds(5);
+  }
+  Serial.println();
   
   while(micros() - startTime < msToDelay * 1000){ //While time elapsed since start of function is less than prescribed time
     
@@ -200,8 +217,15 @@ void delayWhileReading(long msToDelay){
       }
     }
 
-    delayMicroseconds(30); //Arduino: 7 uSec with LEDs, 11 uSec without works pretty well    
+    delayMicroseconds(10); //Arduino: 7 uSec with LEDs, 11 uSec without works pretty well    
   }
+
+  /*for(int i = 0; i< BUFLEN; i++){
+    Serial.print(msgBuf[i], DEC);
+    Serial.print('\t');
+  }
+  Serial.println();*/
+  
   //digitalWrite(LED, LOW);
   
 //This next part is stupidly complicated and I can't quite explain how it works in the time I have right now
@@ -219,7 +243,6 @@ void delayWhileReading(long msToDelay){
     
     if(msgBuf[i] < 0){
       for(int j = msgBuf[i]; j < 0; j++){
-        Serial.print('0');
         if(!isActive){
           isActive = 1;
         }
@@ -235,13 +258,11 @@ void delayWhileReading(long msToDelay){
       }
     }else if(msgBuf[i] > 0){
       for(int j = 0; j < msgBuf[i]; j++){
-        Serial.print('1');
 
         if(isActive){
           N++;
           workingChar = (workingChar >> 1) | 0b10000000;
           if(N == 8){
-            Serial.println();
             N = -1;
             charBuf[c] = workingChar;
             c++;
