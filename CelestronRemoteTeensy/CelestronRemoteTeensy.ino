@@ -1,3 +1,5 @@
+//16086062 101926
+
 //Code to allow microcontroller to control Celestron arm
 
 /*******************************************************************************/
@@ -33,8 +35,8 @@
 #define ALT 17
 #define RIGHT NEG + (2*AZM) //68 - Right is a negative azimuth movement
 #define LEFT POS + (2*AZM) //69 - Left is a positive azimuth movement
-#define UP NEG + (2*ALT) //70 - Up is a negative altitude movement
-#define DOWN POS + (2*ALT) //71 - Down is a positive azimuth movement
+#define DOWN NEG + (2*ALT) //70 - Down is a negative altitude movement, because logic is overrated
+#define UP POS + (2*ALT) //71 - Up is a positive azimuth movement
 
 /*******************************************************************************/
 
@@ -78,22 +80,42 @@ void setup()
   digitalWrite(LED,LOW);
   delay(200);
 
-  long azmTarget = random(POSMAX);
-  long altTarget = random(POSMAX);
-  Serial.print("-->");
-  Serial.print(azmTarget);
-  Serial.print(' ');
-  Serial.println(altTarget);
+  long azmTarget = 1000000;
+  long altTarget = 1000000;
 
-  celestronGoToPos(azmTarget,altTarget); //AZM, ALT
+  //celestronGoToPos(azmTarget,altTarget); //AZM, ALT
 
   /*celestronDriveMotor(UP,9);
   delay(2000);
   celestronStopCmd();*/
 }
 
+int globalSpeed = 9;
+
 void loop() // run over and over
 {
+  if(Serial.available() > 0){
+    byte incomingByte = Serial.read();
+    if(incomingByte == 'Q'){
+      Serial.print(celestronGetPos(AZM));
+      Serial.print(' ');
+      Serial.print(celestronGetPos(ALT));
+      Serial.print(' ');
+      Serial.println(analogRead(A0));
+    }
+    if(incomingByte - '0' <= 9 && incomingByte - '0' >= 1) globalSpeed = incomingByte - '0';
+    if(incomingByte == 'L') celestronDriveMotor(LEFT, globalSpeed);
+    if(incomingByte == 'U') celestronDriveMotor(UP, globalSpeed);
+    if(incomingByte == 'D') celestronDriveMotor(DOWN, globalSpeed);
+    if(incomingByte == 'R') celestronDriveMotor(RIGHT, globalSpeed);
+    if(incomingByte == 'X'){
+      celestronDriveMotor(UP, 0);
+      celestronDriveMotor(LEFT, 0);
+    }
+    if(incomingByte == 'S') Serial.println(analogRead(A0));
+    if(incomingByte == 'G') celestronGoToPos(Serial.parseInt(),Serial.parseInt());
+  }
+  //Serial.println(analogRead(A0));
 }
 
 
@@ -192,10 +214,14 @@ void celestronGoToPos(long azmPos, long altPos){
   long errorAlt = calcSmallestError(currAltPos, altPos);
 
   int goodAlign = 0;
+  digitalWrite(LED, LOW);
+  
   while(goodAlign < 2){
     goodAlign = 0;
     currAzmPos = celestronGetPos(AZM);
     currAltPos = celestronGetPos(ALT);
+    long lastErrorAzm = errorAzm;
+    long lastErrorAlt = errorAlt;
     errorAzm = calcSmallestError(currAzmPos, azmPos);
     errorAlt = calcSmallestError(currAltPos, altPos);
     Serial.print('@');
@@ -206,45 +232,65 @@ void celestronGoToPos(long azmPos, long altPos){
     Serial.print(errorAzm);
     Serial.print('\t');
     Serial.println(errorAlt);
-    
-    if(errorAzm < -50000){
-      celestronDriveMotor(LEFT, 9);
-    }else if(errorAzm > 50000){
-      celestronDriveMotor(RIGHT, 9);
-    }else if(errorAzm < -1000){
-      celestronDriveMotor(LEFT, 4);
-    }else if(errorAzm > 1000){
-      celestronDriveMotor(RIGHT, 4);
-    }else if(errorAzm < -10){
-      celestronDriveMotor(LEFT, 3);
-    }else if(errorAzm > 10){
-      celestronDriveMotor(RIGHT, 3);
+
+    if(errorAzm == 0 || abs(errorAzm-lastErrorAzm) < (0.25 * float(abs(lastErrorAzm)))){
+      if(errorAzm < -50000){
+        celestronDriveMotor(LEFT, 9);
+      }else if(errorAzm > 50000){
+        celestronDriveMotor(RIGHT, 9);
+      }else if(errorAzm < -1000){
+        celestronDriveMotor(LEFT, 4);
+      }else if(errorAzm > 1000){
+        celestronDriveMotor(RIGHT, 4);
+      }else if(errorAzm < -10){
+        celestronDriveMotor(LEFT, 3);
+      }else if(errorAzm > 10){
+        celestronDriveMotor(RIGHT, 3);
+      }else{
+        celestronDriveMotor(RIGHT, 0);
+        goodAlign++;
+      }
     }else{
+      Serial.print("AZM Transient ");
+      Serial.print(errorAzm);
+      Serial.print(' ');
+      Serial.print(lastErrorAzm);
+      Serial.print(' ');
+      Serial.println(0.2 * float(lastErrorAzm));
       celestronDriveMotor(RIGHT, 0);
-      goodAlign++;
     }
 
-    if(errorAlt < -50000){
-      celestronDriveMotor(DOWN, 9);
-    }else if(errorAlt > 50000){
-      celestronDriveMotor(UP, 9);
-    }else if(errorAlt < -1000){
-      celestronDriveMotor(DOWN, 4);
-    }else if(errorAlt > 1000){
-      celestronDriveMotor(UP, 4);
-    }else if(errorAlt < -10){
-      celestronDriveMotor(DOWN, 3);
-    }else if(errorAlt > 10){
-      celestronDriveMotor(UP, 3);
+    if(errorAlt == 0 || abs(errorAlt-lastErrorAlt) < (0.25 * float(abs(lastErrorAlt)))){
+      if(errorAlt < -50000){
+        celestronDriveMotor(UP, 9);
+      }else if(errorAlt > 50000){
+        celestronDriveMotor(DOWN, 9);
+      }else if(errorAlt < -1000){
+        celestronDriveMotor(UP, 4);
+      }else if(errorAlt > 1000){
+        celestronDriveMotor(DOWN, 4);
+      }else if(errorAlt < -10){
+        celestronDriveMotor(UP, 3);
+      }else if(errorAlt > 10){
+        celestronDriveMotor(DOWN, 3);
+      }else{
+        celestronDriveMotor(DOWN, 0);
+        goodAlign++;
+      }
     }else{
+      Serial.print("ALT Transient ");
+      Serial.print(errorAlt);
+      Serial.print(' ');
+      Serial.print(lastErrorAlt);
+      Serial.print(' ');
+      Serial.println(0.2 * float(lastErrorAlt));
       celestronDriveMotor(DOWN, 0);
-      goodAlign++;
     }
     
     Serial.println();
-    delay(100);
+    delay(25);
   }
-  
+  digitalWrite(LED, HIGH);
   Serial.println("Aligned!");
 }
 
@@ -276,7 +322,6 @@ long celestronListenForResponse(long msToDelay){
   
   int bufIndex = 0;
   
-  digitalWrite(LED, HIGH);
   unsigned long startTime = micros();
   
   bool incomingMsg = 0;
