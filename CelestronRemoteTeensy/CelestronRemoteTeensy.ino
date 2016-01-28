@@ -91,6 +91,7 @@ void setup()
 }
 
 int globalSpeed = 9;
+bool vomitData = false;
 
 void loop() // run over and over
 {
@@ -114,8 +115,15 @@ void loop() // run over and over
     }
     if(incomingByte == 'S') Serial.println(analogRead(A0));
     if(incomingByte == 'G') celestronGoToPos(Serial.parseInt(),Serial.parseInt());
+    if(incomingByte == 'V') vomitData = !vomitData;
   }
-  //Serial.println(analogRead(A0));
+  if(vomitData){
+      Serial.print(celestronGetPos(AZM));
+      Serial.print(' ');
+      Serial.print(celestronGetPos(ALT));
+      Serial.print(' ');
+      Serial.println(analogRead(A0));
+    }
 }
 
 
