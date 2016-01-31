@@ -236,7 +236,7 @@ void celestronGoToPos(long azmPos, long altPos){
     Serial.print(currAzmPos);
     Serial.print(',');
     Serial.println(currAltPos);
-    Serial.print("Error: ");
+    Serial.print("Delta Azm/Alt: ");
     Serial.print(errorAzm);
     Serial.print('\t');
     Serial.println(errorAlt);
@@ -368,7 +368,7 @@ long celestronListenForResponse(long msToDelay){
       }
     }
 
-    delayMicroseconds(11);  //Teensy: 11uSec is bae. Don't touch
+    delayMicroseconds(11);  //Teensy: 11uSec is pretty much bae. Don't touch
                             //Arduino: 7 uSec with LEDs, 11 uSec without works pretty well    
   }
 
