@@ -114,5 +114,17 @@ void loop(void)
   Serial.print(" Mag=");
   Serial.println(mag, DEC);
 
+  /*imu::Vector<3> horizonPlane1 = magnet.cross(grav);
+  imu::Vector<3> horizonPlane2 = horizonPlane1.cross(grav);
+  imu::Vector<3> compassProjection = magnet.cross(grav);
+
+  Serial.print(" Compass X: ");
+  Serial.print(compassProjection.x());
+  Serial.print(" Compass Y: ");
+  Serial.print(compassProjection.y());
+  Serial.print(" Compass Z: ");
+  Serial.print(compassProjection.z());
+  Serial.println("\t\t");*/
+
   delay(BNO055_SAMPLERATE_DELAY_MS);
 }
