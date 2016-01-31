@@ -11,7 +11,6 @@ int sampleTime = 10; //Should be ~10us less than a factor of lowTime
 int sampleTimeShiftVal = 2; //Rightshifting is much cheaper than dividing; 2^this is how many samples per interval
 int sensorThreshold = 5;
 
-
 #define WAIT_FOR_MSG_TIMEOUT 500000 //us
 
 char msgBuf[MSG_BUF_LEN];
@@ -21,14 +20,30 @@ void setup() {
   pinMode(LED, OUTPUT);
   Serial.begin(250000);
   delay(1000);
+  defineParameters();
 }
 
 void loop() {
-  /*char potato[] = "This string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\n"; 
-  blink_Packet(potato, 1024);
-  delay(500);*/
+
+  //listen_for_msg();
   
-  listen_for_msg();
+  if(Serial.available()){
+    byte incomingByte = Serial.read();
+    if(incomingByte == 'P') defineParameters();
+    if(incomingByte == '>'){
+      int msgLen = Serial.available(); //Counts number of bytes to be sent
+      Serial.readBytes(msgBuf, msgLen);
+      blink_Packet(msgBuf, msgLen);
+      clearMsgBuf();
+    }
+    if(incomingByte == '<'){
+      while(Serial.available()) Serial.read(); //For no obvious reason, not clearing the Serial buffer prior to listening causes weird timing bugs
+      listen_for_msg();
+    }
+  }
+  
+  //char potato[] = "This string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\n"; 
+  //blink_Packet(potato, 1024);
   
   /*Serial.print(analogRead(SENSOR_PIN));
   Serial.print('\t');
@@ -36,14 +51,60 @@ void loop() {
   delay(5);*/
 }
 
-/*Function: listen_for_msg:
-    Postconditions:
-        populates MSG_BUF_LEN with received bytes
-*/
+void defineParameters(){
+  Serial.println("Input pulse time (us; blank for 100): ");
+  while(!Serial.available());
+  int desiredPulseTime = Serial.parseInt();
+  Serial.println("Input sample interval (us; blank for 10): ");
+  while(!Serial.available());
+  int desiredSampleTime = Serial.parseInt();
+  Serial.println("Input threshold (0-1023; blank for 5): ");
+  while(!Serial.available());
+  int desiredThreshold = Serial.parseInt();
+  
+  Serial.print("Pulse Time: ");
+  Serial.print(desiredPulseTime);
+  highTime = desiredPulseTime;
+  lowTime = desiredPulseTime;
+  if(desiredPulseTime <= 0){
+    Serial.print(" - Ignored");
+    highTime = 100;
+    lowTime = 100;
+  }
+  Serial.print(" --> ");
+  Serial.println(highTime);
+
+  Serial.print("Input Sample Interval: ");
+  Serial.print(desiredSampleTime);
+  sampleTime = desiredSampleTime;
+  if(desiredSampleTime <= 0){
+    Serial.print(" - Ignored");
+    sampleTime = 10;
+  }
+  Serial.print(" --> ");
+  Serial.println(sampleTime);
+
+  Serial.print("Input Threshold: ");
+  Serial.print(desiredThreshold);
+  sensorThreshold = desiredThreshold;
+  if(desiredThreshold <= 0){
+    Serial.print(" - Ignored");
+    sensorThreshold = 5;
+  }
+  Serial.print(" --> ");
+  Serial.println(sensorThreshold);
+  Serial.println("---------------------------------------");
+  Serial.println();
+}
 
 bool checkSensor(int pin){
   return (analogRead(pin) > sensorThreshold);
 }
+
+/*Function: listen_for_msg:
+    Postconditions:
+        populates MSG_BUF_LEN with received bytes
+*/
 
 int listen_for_msg(){
   int charsRead = 0;
@@ -53,13 +114,8 @@ int listen_for_msg(){
   int samplesCounted;
 
   digitalWrite(LED, HIGH);
-  //Wait for beginning of transmission; return failed if timeout exceeded
-  while(checkSensor(SENSOR_PIN)==0){
-    //timeoutFailure = micros()-startTime < WAIT_FOR_MSG_TIMEOUT;
-  }
+  while(checkSensor(SENSOR_PIN)==0){} //Note: this hangs the board
   digitalWrite(LED, LOW);
-  
-  if(timeoutFailure) return 0;
 
   
   while(charsRead < MSG_BUF_LEN && stopChar == 0){
