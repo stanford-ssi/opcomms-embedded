@@ -1,14 +1,15 @@
 #define LASER 5
+#define LED 13
 #define N_BITS 2
 #define SENSOR_PIN A0
-#define MSG_BUF_LEN 10
+#define MSG_BUF_LEN 1024
 
 //These are not explicitly constant because they should be field configurable
-int highTime = 100000; //us
-int lowTime = 100000; //us
-int sampleTime = 24000; //Should be ~10us less than a factor of lowTime
+int highTime = 100; //us
+int lowTime = 100; //us
+int sampleTime = 10; //Should be ~10us less than a factor of lowTime
 int sampleTimeShiftVal = 2; //Rightshifting is much cheaper than dividing; 2^this is how many samples per interval
-int sensorThreshold = 8;
+int sensorThreshold = 5;
 
 
 #define WAIT_FOR_MSG_TIMEOUT 500000 //us
@@ -17,14 +18,17 @@ char msgBuf[MSG_BUF_LEN];
 
 void setup() {
   pinMode(LASER, OUTPUT);
+  pinMode(LED, OUTPUT);
   Serial.begin(250000);
+  delay(1000);
 }
 
 void loop() {
-  /*char potato[] = "potato"; 
-  blink_Packet(potato, 6);*/
+  /*char potato[] = "This string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\n"; 
+  blink_Packet(potato, 1024);
+  delay(500);*/
   
-  if(listen_for_msg() == 0) Serial.println("Timed out");
+  listen_for_msg();
   
   /*Serial.print(analogRead(SENSOR_PIN));
   Serial.print('\t');
@@ -44,15 +48,16 @@ bool checkSensor(int pin){
 int listen_for_msg(){
   int charsRead = 0;
   bool stopChar = 0;
-  long startTime = micros();
   bool timeoutFailure = false;
   char charBeingRead;
   int samplesCounted;
 
+  digitalWrite(LED, HIGH);
   //Wait for beginning of transmission; return failed if timeout exceeded
-  while(!timeoutFailure && checkSensor(SENSOR_PIN)==0){
-    timeoutFailure = micros()-startTime < WAIT_FOR_MSG_TIMEOUT;
+  while(checkSensor(SENSOR_PIN)==0){
+    //timeoutFailure = micros()-startTime < WAIT_FOR_MSG_TIMEOUT;
   }
+  digitalWrite(LED, LOW);
   
   if(timeoutFailure) return 0;
 
@@ -63,25 +68,38 @@ int listen_for_msg(){
     for(int i = 0; i < 4; i++){
       delayMicroseconds(highTime); //Let start pulse pass
       timeoutFailure = false;
-      startTime = micros();
       samplesCounted = 0;
-          
-      while(samplesCounted < 100 && checkSensor(SENSOR_PIN)==0){
-        samplesCounted += 1;
-        delayMicroseconds(sampleTime);
+
+      while(checkSensor(SENSOR_PIN)==1){
+        samplesCounted++;
+      }
+      if(samplesCounted > 20){
+        stopChar = 1; //detect end of packet
+        //Serial.println("EOP");
       }
 
-      Serial.print(micros());
-      Serial.print(' ');
-      Serial.println(samplesCounted);
-       
-      samplesCounted = samplesCountedToNibblet(samplesCounted);
-      charBeingRead = (charBeingRead << N_BITS) | samplesCounted; //Moves existing bits to the left, inserts new bits on right
-    }
-    msgBuf[charsRead] = charBeingRead;
-    Serial.println(charBeingRead);
+      if(!stopChar){
+        samplesCounted = 0;
+        while(samplesCounted < 100 && checkSensor(SENSOR_PIN)==0){
+          samplesCounted++;
+          delayMicroseconds(sampleTime);
+        }
+
+        if(samplesCounted >= 100) stopChar = 1; //Detect failure and terminate packet
   
-    charsRead++;
+        /*Serial.print(micros());
+        Serial.print(' ');*/
+        //Serial.println(samplesCounted);
+         
+        samplesCounted = samplesCountedToNibblet(samplesCounted);
+        charBeingRead = (charBeingRead << N_BITS) | samplesCounted; //Moves existing bits to the left, inserts new bits on right
+      }
+    }
+    if(!stopChar){
+      msgBuf[charsRead] = charBeingRead;
+      //Serial.println(charBeingRead);
+      charsRead++;
+    }
   }
 
   Serial.println(msgBuf);
@@ -105,6 +123,7 @@ int listen_for_msg(){
  */
  
 int samplesCountedToNibblet(int samplesCounted){
+  if(samplesCounted == 3) samplesCounted++; //SUPER HACKY - really short lows will occasionally be dropped, so this helps correct for that
   return(samplesCounted >> sampleTimeShiftVal) - 1;
 }
 
