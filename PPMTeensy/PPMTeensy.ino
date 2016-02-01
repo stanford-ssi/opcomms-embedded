@@ -37,6 +37,7 @@ void loop() {
       clearMsgBuf();
     }
     if(incomingByte == '<'){
+      Serial.println("Waiting for msg:");
       while(Serial.available()) Serial.read(); //For no obvious reason, not clearing the Serial buffer prior to listening causes weird timing bugs
       listen_for_msg();
     }
