@@ -133,7 +133,7 @@ void loop() // run over and over
     if(incomingByte == 'S') Serial.println(analogRead(A0));
     if(incomingByte == 'G') celestronGoToPos(Serial.parseInt(),Serial.parseInt());
     if(incomingByte == 'V') vomitData = !vomitData;
-    if(incomingByte == '~') beamHold = ~beamHold;
+    if(incomingByte == '~') beamHold = !beamHold;
     
     if(incomingByte == 'P') defineParameters();
     if(incomingByte == '>'){
@@ -149,7 +149,7 @@ void loop() // run over and over
       while(Serial.available()) Serial.read(); //For no obvious reason, not clearing the Serial buffer prior to listening causes weird timing bugs
       listen_for_msg();
     }
-    digitalWrite(LASER,beamHold);
+    digitalWrite(LASER,beamHold ? HIGH : LOW);
   }
   if(vomitData){
       Serial.print(celestronGetPos(AZM));
