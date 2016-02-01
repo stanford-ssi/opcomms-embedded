@@ -1,7 +1,7 @@
 #define LASER 5
 #define LED 13
 #define N_BITS 2
-#define SENSOR_PIN A0
+#define SENSOR_PIN A1
 #define MSG_BUF_LEN 1024
 
 //These are not explicitly constant because they should be field configurable
@@ -9,7 +9,7 @@ int highTime = 100; //us
 int lowTime = 100; //us
 int sampleTime = 10; //Should be ~10us less than a factor of lowTime
 int sampleTimeShiftVal = 2; //Rightshifting is much cheaper than dividing; 2^this is how many samples per interval
-int sensorThreshold = 5;
+int sensorThreshold = 8;
 
 #define WAIT_FOR_MSG_TIMEOUT 500000 //us
 
@@ -23,9 +23,12 @@ void setup() {
   defineParameters();
 }
 
+bool waitMode = false;
+
 void loop() {
 
   //listen_for_msg();
+
   
   if(Serial.available()){
     byte incomingByte = Serial.read();
@@ -36,11 +39,18 @@ void loop() {
       blink_Packet(msgBuf, msgLen);
       clearMsgBuf();
     }
+    if(incomingByte == 'W') waitMode = !waitMode;
+    
     if(incomingByte == '<'){
       Serial.println("Waiting for msg:");
       while(Serial.available()) Serial.read(); //For no obvious reason, not clearing the Serial buffer prior to listening causes weird timing bugs
       listen_for_msg();
     }
+  }
+
+  if(waitMode){
+    while(Serial.available()) Serial.read(); //For no obvious reason, not clearing the Serial buffer prior to listening causes weird timing bugs
+    listen_for_msg();
   }
   
   //char potato[] = "This string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\nThis string is sixty four characters (achieved with difficulty)\n"; 
@@ -159,7 +169,7 @@ int listen_for_msg(){
     }
   }
 
-  Serial.println(msgBuf);
+  Serial.print(msgBuf);
   clearMsgBuf();
   return charsRead;
 }
@@ -234,7 +244,7 @@ void blink_char(char c) {
         pulses the light to transmit data
 */
 void blink(int data) {
-    Serial.println(data);
+    //Serial.println(data);
     //Time on = PULSE_LENGTH
     digitalWrite(LASER,HIGH);
     delayMicroseconds(highTime);
