@@ -25,48 +25,6 @@
  *  W - Persistently waits to receive message over PPM. HANGS PROGRAM INDEFINITELY (known issue)
  *  
  *****************************************************************/
-    
-    if(incomingByte == 'Q'){
-      Serial.print(celestronGetPos(AZM));
-      Serial.print(' ');
-      Serial.print(celestronGetPos(ALT));
-      Serial.print(' ');
-      Serial.println(analogRead(A0));
-    }
-    if(incomingByte - '0' <= 9 && incomingByte - '0' >= 1) globalSpeed = incomingByte - '0';
-    if(incomingByte == 'L') celestronDriveMotor(LEFT, globalSpeed);
-    if(incomingByte == 'U') celestronDriveMotor(UP, globalSpeed);
-    if(incomingByte == 'D') celestronDriveMotor(DOWN, globalSpeed);
-    if(incomingByte == 'R') celestronDriveMotor(RIGHT, globalSpeed);
-    if(incomingByte == 'X'){
-      celestronDriveMotor(UP, 0);
-      celestronDriveMotor(LEFT, 0);
-    }
-    if(incomingByte == 'S') Serial.println(analogRead(A0));
-    if(incomingByte == 'G') celestronGoToPos(Serial.parseInt(),Serial.parseInt());
-    if(incomingByte == 'V') vomitData = !vomitData;
-    
-    if(incomingByte == '~'){
-      beamHold = !beamHold;
-      blinkMode = false;
-    }
-    if(incomingByte == '!'){
-      beamHold = false;
-      blinkMode = !blinkMode;
-    }
-    
-    if(incomingByte == 'P') defineParameters();
-    if(incomingByte == '>'){
-      int msgLen = Serial.available(); //Counts number of bytes to be sent
-      Serial.readBytes(msgBuf, msgLen);
-      blink_Packet(msgBuf, msgLen);
-      clearMsgBuf();
-    }
-    if(incomingByte == 'W') waitMode = !waitMode;
-    
-    if(incomingByte == '<'){
-
-
 
 #define LASER 5
 #define N_BITS 2
