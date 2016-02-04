@@ -1,3 +1,73 @@
+/*****************************************************************
+ * 
+ *  COMMAND DOCUMENTATION
+ *  
+ *  <value> means that value is sent, with no spaces or < > characters
+ *  
+ *  Q - Returns Azimuth Position <space> Altitude Position <space> Voltage on Analog 0 (connected to sensor)
+ *  S - Returns only voltage on Analog 0 (connected to sensor)
+ *  V - Turns on persistent output (continuously sends Q command, reporting position and sensor voltage)
+ *  
+ *  Any single digit 0-9 - Sets default movement speed to that value (9 is fast, 4 is slow, 3 and below do not move)
+ *  L - Azimuth motor turns left at default speed (and persists)
+ *  R - Azimuth motor turns right at default speed (and persists)
+ *  U - Altitude motor turns up at default speed (and persists)
+ *  D - Altitude motor turns down at default speed (and persists)
+ *  X - Both motors stop (creates 600ms delay to acheive full stop)
+ *  G<azmPos>,<altPos> - Drives arm to specified position. HANGS PROGRAM UNTIL POSITION IS REACHED
+ *  
+ *  ~ - Turns on/off beam hold, keeping laser on persistently
+ *  ! - Turns on 1 Hz laser pulse
+ *  
+ *  P - Allows for in-test redefinition of PPM parameters (use is discouraged)
+ *  ><message> - Transmits message over PPM
+ *  < - Waits to receive message over PPM. HANGS PROGRAM UNTIL MESSAGE IS RECEIVED
+ *  W - Persistently waits to receive message over PPM. HANGS PROGRAM INDEFINITELY (known issue)
+ *  
+ *****************************************************************/
+    
+    if(incomingByte == 'Q'){
+      Serial.print(celestronGetPos(AZM));
+      Serial.print(' ');
+      Serial.print(celestronGetPos(ALT));
+      Serial.print(' ');
+      Serial.println(analogRead(A0));
+    }
+    if(incomingByte - '0' <= 9 && incomingByte - '0' >= 1) globalSpeed = incomingByte - '0';
+    if(incomingByte == 'L') celestronDriveMotor(LEFT, globalSpeed);
+    if(incomingByte == 'U') celestronDriveMotor(UP, globalSpeed);
+    if(incomingByte == 'D') celestronDriveMotor(DOWN, globalSpeed);
+    if(incomingByte == 'R') celestronDriveMotor(RIGHT, globalSpeed);
+    if(incomingByte == 'X'){
+      celestronDriveMotor(UP, 0);
+      celestronDriveMotor(LEFT, 0);
+    }
+    if(incomingByte == 'S') Serial.println(analogRead(A0));
+    if(incomingByte == 'G') celestronGoToPos(Serial.parseInt(),Serial.parseInt());
+    if(incomingByte == 'V') vomitData = !vomitData;
+    
+    if(incomingByte == '~'){
+      beamHold = !beamHold;
+      blinkMode = false;
+    }
+    if(incomingByte == '!'){
+      beamHold = false;
+      blinkMode = !blinkMode;
+    }
+    
+    if(incomingByte == 'P') defineParameters();
+    if(incomingByte == '>'){
+      int msgLen = Serial.available(); //Counts number of bytes to be sent
+      Serial.readBytes(msgBuf, msgLen);
+      blink_Packet(msgBuf, msgLen);
+      clearMsgBuf();
+    }
+    if(incomingByte == 'W') waitMode = !waitMode;
+    
+    if(incomingByte == '<'){
+
+
+
 #define LASER 5
 #define N_BITS 2
 #define SENSOR_PIN A1
@@ -62,9 +132,11 @@ signed char posBuf[BUFLEN];
 unsigned char charBuf[CHARBUFLEN];
 bool waitMode = false;
 bool beamHold = false;
+bool blinkMode = false;
 
 void setup()
 {
+  analogReference(INTERNAL);
   Serial.begin(250000);
 
   pinMode(EN_PIN, OUTPUT);
@@ -99,16 +171,11 @@ void setup()
 
   long azmTarget = 1000000;
   long altTarget = 1000000;
-
-  //celestronGoToPos(azmTarget,altTarget); //AZM, ALT
-
-  /*celestronDriveMotor(UP,9);
-  delay(2000);
-  celestronStopCmd();*/
 }
 
 int globalSpeed = 9;
 bool vomitData = false;
+bool blinkState = 0;
 
 void loop() // run over and over
 {
@@ -133,7 +200,15 @@ void loop() // run over and over
     if(incomingByte == 'S') Serial.println(analogRead(A0));
     if(incomingByte == 'G') celestronGoToPos(Serial.parseInt(),Serial.parseInt());
     if(incomingByte == 'V') vomitData = !vomitData;
-    if(incomingByte == '~') beamHold = !beamHold;
+    
+    if(incomingByte == '~'){
+      beamHold = !beamHold;
+      blinkMode = false;
+    }
+    if(incomingByte == '`'){
+      beamHold = false;
+      blinkMode = !blinkMode;
+    }
     
     if(incomingByte == 'P') defineParameters();
     if(incomingByte == '>'){
@@ -149,15 +224,22 @@ void loop() // run over and over
       while(Serial.available()) Serial.read(); //For no obvious reason, not clearing the Serial buffer prior to listening causes weird timing bugs
       listen_for_msg();
     }
-    digitalWrite(LASER,beamHold ? HIGH : LOW);
   }
+  digitalWrite(LASER,beamHold ? HIGH : LOW);
+  
+  if(blinkMode){
+    digitalWrite(LASER, blinkState ? HIGH : LOW);
+    blinkState = !blinkState;
+    delay(500);
+  }
+  
   if(vomitData){
       Serial.print(celestronGetPos(AZM));
       Serial.print(' ');
       Serial.print(celestronGetPos(ALT));
       Serial.print(' ');
       Serial.println(analogRead(A0));
-    }
+   }
 }
 
 
