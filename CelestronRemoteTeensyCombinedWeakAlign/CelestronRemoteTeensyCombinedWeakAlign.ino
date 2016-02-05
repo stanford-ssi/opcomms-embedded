@@ -63,6 +63,7 @@ char msgBuf[MSG_BUF_LEN];
                    //This should really be closer to 50 uSec, but the transmission execution time on a 16MHz Arduino chews up ~5 uSec
 
 #define POSMAX 16777216 //2^24; all angles are represented as 24 bit integers, and dividing by POSMAX converts to a fraction of a complete rotation
+#define POS_TOLERANCE 5000 //Max value two position values are allowed to deviate from each other while the system believes that they followed each other
 
 /******** IMPORTANT ********/
 //If Serial seems to be breaking, adjust BITTIIME. The communication expects to run at 19200 baud, and depending on your microcontroller
@@ -135,6 +136,9 @@ void setup()
 int globalSpeed = 9;
 bool vomitData = false;
 bool blinkState = 0;
+
+long currentAzm = -1;
+long currentAlt = -1;
 
 void loop() // run over and over
 {
@@ -294,6 +298,18 @@ void celestronDriveMotor(char dir, int spd){
 
 //Command to get angular position on the specified axis
 long celestronGetPos(char axis){
+  long verifyPos = celestronRoughGetPos(axis);
+  long tentativePos = verifyPos + POS_TOLERANCE + 1; //Make value guaranteed to fail test
+  
+  while(abs(verifyPos-tentativePos) > POS_TOLERANCE){ //If positions are not within tolerance, keep polling
+    tentativePos = verifyPos;
+    verifyPos = celestronRoughGetPos(axis);
+  }
+  
+  return(verifyPos);
+}
+
+long celestronRoughGetPos(char axis){
   unsigned char lastChar = 239 - axis; //Weird checksum character; command won't be accepted without it
 
 //This is the list of characters to trigger a position query on the axis specified by "axis" - please don't touch
