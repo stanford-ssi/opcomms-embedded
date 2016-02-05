@@ -35,7 +35,7 @@
 
 #define LASER 5
 #define N_BITS 2
-#define SENSOR_PIN A1
+#define SENSOR_PIN A0
 #define MSG_BUF_LEN 1024
 
 //These are not explicitly constant because they should be field configurable
@@ -121,7 +121,7 @@ void setup()
   digitalWrite(EN_PIN, HIGH);
   digitalWrite(TX, HIGH);
 
-  randomSeed(analogRead(0));
+  randomSeed(analogRead(A2));
 
   /* Initialise the orientation sensor */
   if(!bnoEnabled || !bno.begin())
@@ -177,7 +177,7 @@ void loop() // run over and over
       celestronDriveMotor(UP, 0);
       celestronDriveMotor(LEFT, 0);
     }
-    if(incomingByte == 'S') Serial.println(analogRead(A0));
+    if(incomingByte == 'S') Serial.println(analogRead(SENSOR_PIN));
     if(incomingByte == 'G') celestronGoToPos(Serial.parseInt(),Serial.parseInt());
     if(incomingByte == 'V') vomitData = !vomitData;
     if(incomingByte == 'I') bnoVerbose = !bnoVerbose;
@@ -186,7 +186,7 @@ void loop() // run over and over
       beamHold = !beamHold;
       blinkMode = false;
     }
-    if(incomingByte == '`'){
+    if(incomingByte == '!'){
       beamHold = false;
       blinkMode = !blinkMode;
     }
@@ -633,14 +633,14 @@ bool checkSensor(int pin){
 int listen_for_msg(){
   int charsRead = 0;
   bool stopChar = 0;
-  bool timeoutFailure = false;
   char charBeingRead;
   int samplesCounted;
 
 
   elapsedMillis waiting;
   digitalWrite(LED, HIGH);
-  while(checkSensor(SENSOR_PIN)==0 && waiting < 10000){} //Note: this hangs the board
+  //while(checkSensor(SENSOR_PIN)==0){} //Note: this hangs the board
+  while(checkSensor(SENSOR_PIN)==0 && waiting < 10000){} //Note: this hangs the board until a message arrives or 10 seconds elapse, whatever comes first
   digitalWrite(LED, LOW);
 
   if(waiting >= 10000){
@@ -653,7 +653,6 @@ int listen_for_msg(){
     //The 4 here needs to be changed to accept a different PPM value and I couldn't think of a smart way of doing it in advance
     for(int i = 0; i < 4; i++){
       delayMicroseconds(highTime); //Let start pulse pass
-      timeoutFailure = false;
       samplesCounted = 0;
 
       while(checkSensor(SENSOR_PIN)==1){
@@ -795,7 +794,8 @@ void query(){
   Serial.print(' ');
   Serial.print(celestronGetPos(ALT));
   Serial.print(' ');
-  Serial.print(analogRead(A0));
+  Serial.print(analogRead(SENSOR_PIN));
+  Serial.print(' ');
   if(bnoEnabled && bnoVerbose) queryBNO();
   Serial.println();
 }
