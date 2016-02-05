@@ -1,3 +1,8 @@
+#include <Wire.h>
+#include <Adafruit_Sensor.h>
+#include <Adafruit_BNO055.h>
+#include <utility/imumaths.h>
+
 /*****************************************************************
  * 
  *  COMMAND DOCUMENTATION
@@ -6,7 +11,8 @@
  *  
  *  Q - Returns Azimuth Position <space> Altitude Position <space> Voltage on Analog 0 (connected to sensor)
  *  S - Returns only voltage on Analog 0 (connected to sensor)
- *  V - Turns on persistent output (continuously sends Q command, reporting position and sensor voltage)
+ *  V - Toggles persistent output (continuously sends Q command, reporting position and sensor voltage)
+ *  I - Toggles IMU readout
  *  
  *  Any single digit 0-9 - Sets default movement speed to that value (9 is fast, 4 is slow, 3 and below do not move)
  *  L - Azimuth motor turns left at default speed (and persists)
@@ -85,6 +91,11 @@ char msgBuf[MSG_BUF_LEN];
 
 /*******************************************************************************/
 
+#define BNO055_SAMPLERATE_DELAY_MS (100)
+Adafruit_BNO055 bno = Adafruit_BNO055();
+
+/*******************************************************************************/
+
 #define BUFLEN 64
 #define CHARBUFLEN 10
 
@@ -93,6 +104,8 @@ unsigned char charBuf[CHARBUFLEN];
 bool waitMode = false;
 bool beamHold = false;
 bool blinkMode = false;
+bool bnoEnabled = true; //True by default; if fails to enable, will be set to false. Initialize to false to completely disable
+bool bnoVerbose = false; //By default, do not print out position data when queried
 
 void setup()
 {
@@ -109,6 +122,14 @@ void setup()
   digitalWrite(TX, HIGH);
 
   randomSeed(analogRead(0));
+
+  /* Initialise the orientation sensor */
+  if(!bnoEnabled || !bno.begin())
+  {
+    /* There was a problem detecting the BNO055 ... check your connections */
+    Serial.print("Ooops, no BNO055 detected ... Check your wiring or I2C ADDR!");
+    bnoEnabled = false;
+  }
 
 /*******************************************************************************/
 //Initialization code above this line is required for proper startup
@@ -145,11 +166,7 @@ void loop() // run over and over
   if(Serial.available() > 0){
     byte incomingByte = Serial.read();
     if(incomingByte == 'Q'){
-      Serial.print(celestronGetPos(AZM));
-      Serial.print(' ');
-      Serial.print(celestronGetPos(ALT));
-      Serial.print(' ');
-      Serial.println(analogRead(A0));
+      query();
     }
     if(incomingByte - '0' <= 9 && incomingByte - '0' >= 1) globalSpeed = incomingByte - '0';
     if(incomingByte == 'L') celestronDriveMotor(LEFT, globalSpeed);
@@ -163,6 +180,7 @@ void loop() // run over and over
     if(incomingByte == 'S') Serial.println(analogRead(A0));
     if(incomingByte == 'G') celestronGoToPos(Serial.parseInt(),Serial.parseInt());
     if(incomingByte == 'V') vomitData = !vomitData;
+    if(incomingByte == 'I') bnoVerbose = !bnoVerbose;
     
     if(incomingByte == '~'){
       beamHold = !beamHold;
@@ -223,14 +241,9 @@ void loop() // run over and over
 
   
   if(vomitData){
-      Serial.print(celestronGetPos(AZM));
-      Serial.print(' ');
-      Serial.print(celestronGetPos(ALT));
-      Serial.print(' ');
-      Serial.println(analogRead(A0));
+      query();
    }
 }
-
 
 //Call before beginning a command to configure pins
 void beginCmd(){ //Reconfigure pins to prepare to transmit
@@ -776,4 +789,62 @@ void blinkLED(int onTimeIn_ms){
   delay(onTimeIn_ms);
   digitalWrite(LED, LOW);
 }
+
+void query(){
+  Serial.print(celestronGetPos(AZM));
+  Serial.print(' ');
+  Serial.print(celestronGetPos(ALT));
+  Serial.print(' ');
+  Serial.print(analogRead(A0));
+  if(bnoEnabled && bnoVerbose) queryBNO();
+  Serial.println();
+}
+
+void queryBNO(){
+  imu::Vector<3> euler = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
+
+  /* Display the floating point data */
+  Serial.print("X: ");
+  Serial.print(euler.x());
+  Serial.print(" Y: ");
+  Serial.print(euler.y());
+  Serial.print(" Z: ");
+  Serial.print(euler.z());
+  Serial.print("\t");
+
+  imu::Vector<3> grav = bno.getVector(Adafruit_BNO055::VECTOR_GRAVITY);
+
+  /* Display the floating point data */
+  Serial.print(" Gravity X: ");
+  Serial.print(grav.x());
+  Serial.print(" Gravity Y: ");
+  Serial.print(grav.y());
+  Serial.print(" Gravity Z: ");
+  Serial.print(grav.z());
+  Serial.print("\t");
+
+  imu::Vector<3> magnet = bno.getVector(Adafruit_BNO055::VECTOR_MAGNETOMETER);
+
+  /* Display the floating point data */
+  Serial.print(" Magnetic X: ");
+  Serial.print(magnet.x());
+  Serial.print(" Magnetic Y: ");
+  Serial.print(magnet.y());
+  Serial.print(" Magnetic Z: ");
+  Serial.print(magnet.z());
+  Serial.print("\t\t");
+
+  /* Display calibration status for each sensor. */
+  uint8_t system, gyro, accel, mag = 0;
+  bno.getCalibration(&system, &gyro, &accel, &mag);
+  Serial.print("CALIBRATION: Sys=");
+  Serial.print(system, DEC);
+  Serial.print(" Gyro=");
+  Serial.print(gyro, DEC);
+  Serial.print(" Accel=");
+  Serial.print(accel, DEC);
+  Serial.print(" Mag=");
+  Serial.println(mag, DEC);
+}
+
 
