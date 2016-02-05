@@ -185,7 +185,15 @@ void loop() // run over and over
     if(incomingByte == '<'){
       Serial.println("Waiting for msg:");
       while(Serial.available()) Serial.read(); //For no obvious reason, not clearing the Serial buffer prior to listening causes weird timing bugs
-      listen_for_msg();
+      int charsRead = listen_for_msg();
+      
+      if(charsRead != -1){
+        Serial.print(charsRead);
+        Serial.print(msgBuf);
+        clearMsgBuf();
+      }else{
+        Serial.print(0);
+      }
     }
   }
   digitalWrite(LASER,beamHold ? HIGH : LOW);
@@ -198,7 +206,15 @@ void loop() // run over and over
 
   if(waitMode){
     while(Serial.available()) Serial.read(); //For no obvious reason, not clearing the Serial buffer prior to listening causes weird timing bugs
-    listen_for_msg();
+    int charsRead = listen_for_msg();
+    
+    if(charsRead != -1){
+      Serial.print(charsRead);
+      Serial.print(msgBuf);
+      clearMsgBuf();
+    }else{
+        Serial.print(0);
+    }
   }
 
   
@@ -643,8 +659,6 @@ int listen_for_msg(){
     }
   }
 
-  Serial.print(msgBuf);
-  clearMsgBuf();
   return charsRead;
 }
 
