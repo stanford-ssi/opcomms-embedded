@@ -18,6 +18,7 @@
  *  
  *  ~ - Turns on/off beam hold, keeping laser on persistently
  *  ! - Turns on 1 Hz laser pulse
+ *  B - Blinks LED on board. HANGS PROGRAM FOR 200 ms
  *  
  *  P - Allows for in-test redefinition of PPM parameters (use is discouraged)
  *  ><message> - Transmits message over PPM
@@ -166,6 +167,10 @@ void loop() // run over and over
     if(incomingByte == '`'){
       beamHold = false;
       blinkMode = !blinkMode;
+    }
+
+    if(incomingByte == 'B'){
+      blinkLED();
     }
     
     if(incomingByte == 'P') defineParameters();
@@ -370,7 +375,7 @@ void celestronGoToPos(long azmPos, long altPos){
     Serial.println();
     delay(25);
   }
-  digitalWrite(LED, HIGH);
+  blinkLED();
   Serial.println("Aligned!");
 }
 
@@ -730,5 +735,15 @@ char checksum(char* buffer, int len)
     char sum = 0;
     for(int i = 0; i < len; i++) sum ^= buffer[i];
     return sum;
+}
+
+void blinkLED(){
+  blinkLED(200);
+}
+
+void blinkLED(int onTimeIn_ms){
+  digitalWrite(LED, HIGH);
+  delay(onTimeIn_ms);
+  digitalWrite(LED, LOW);
 }
 
