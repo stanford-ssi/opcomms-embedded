@@ -21,8 +21,8 @@
  *  
  *  P - Allows for in-test redefinition of PPM parameters (use is discouraged)
  *  ><message> - Transmits message over PPM
- *  < - Waits to receive message over PPM. HANGS PROGRAM UNTIL MESSAGE IS RECEIVED
- *  W - Persistently waits to receive message over PPM. HANGS PROGRAM INDEFINITELY (known issue)
+ *  < - Waits to receive message over PPM. HANGS PROGRAM UNTIL MESSAGE IS RECEIVED OR 10 SECONDS ELAPSE (whichever comes first. Timeout currently untested)
+ *  W - Persistently waits to receive message over PPM. HANGS PROGRAM UNITL 10 SECONDS ELAPSE WITHOUT A MESSAGE (Timeout currently untested)
  *  
  *****************************************************************/
 
@@ -190,6 +190,12 @@ void loop() // run over and over
     blinkState = !blinkState;
     delay(500);
   }
+
+  if(waitMode){
+    while(Serial.available()) Serial.read(); //For no obvious reason, not clearing the Serial buffer prior to listening causes weird timing bugs
+    listen_for_msg();
+  }
+
   
   if(vomitData){
       Serial.print(celestronGetPos(AZM));
@@ -581,10 +587,16 @@ int listen_for_msg(){
   char charBeingRead;
   int samplesCounted;
 
+
+  elapsedMillis waiting;
   digitalWrite(LED, HIGH);
-  while(checkSensor(SENSOR_PIN)==0){} //Note: this hangs the board
+  while(checkSensor(SENSOR_PIN)==0 && waiting < 10000){} //Note: this hangs the board
   digitalWrite(LED, LOW);
 
+  if(waiting >= 10000){
+    waitMode = false;
+    return -1; //Time out if time without message exceeds 10s
+  }
   
   while(charsRead < MSG_BUF_LEN && stopChar == 0){
 
