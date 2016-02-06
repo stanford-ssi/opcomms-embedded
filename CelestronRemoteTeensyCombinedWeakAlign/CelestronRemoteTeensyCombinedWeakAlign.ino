@@ -644,10 +644,10 @@ int listen_for_msg(){
   elapsedMillis waiting;
   digitalWrite(LED, HIGH);
   //while(checkSensor(SENSOR_PIN)==0){} //Note: this hangs the board
-  while(checkSensor(SENSOR_PIN)==0 && waiting < 10000){} //Note: this hangs the board until a message arrives or 10 seconds elapse, whatever comes first
+  while(checkSensor(SENSOR_PIN)==0 && !Serial.available()){} //Note: this hangs the board until a message arrives or 10 seconds elapse, whatever comes first
   digitalWrite(LED, LOW);
 
-  if(waiting >= 10000){
+  if(Serial.available()){
     waitMode = false;
     return -1; //Time out if time without message exceeds 10s
   }
