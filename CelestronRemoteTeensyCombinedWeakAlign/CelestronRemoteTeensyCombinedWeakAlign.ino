@@ -13,6 +13,7 @@
  *  S - Returns only voltage on Analog 0 (connected to sensor)
  *  V - Toggles persistent output (continuously sends Q command, reporting position and sensor voltage)
  *  I - Toggles IMU readout
+ *  M - Toggles less verbose IMU readout
  *  
  *  Any single digit 0-9 - Sets default movement speed to that value (9 is fast, 4 is slow, 3 and below do not move)
  *  L - Azimuth motor turns left at default speed (and persists)
@@ -105,7 +106,9 @@ bool waitMode = false;
 bool beamHold = false;
 bool blinkMode = false;
 bool bnoEnabled = true; //True by default; if fails to enable, will be set to false. Initialize to false to completely disable
-bool bnoVerbose = false; //By default, do not print out position data when queried
+char bnoVerbose = 0; //By default, do not print out position data when queried
+#define VERBOSE 1
+#define VERY_VERBOSE 2
 
 void setup()
 {
@@ -180,7 +183,8 @@ void loop() // run over and over
     if(incomingByte == 'S') Serial.println(analogRead(SENSOR_PIN));
     if(incomingByte == 'G') celestronGoToPos(Serial.parseInt(),Serial.parseInt());
     if(incomingByte == 'V') vomitData = !vomitData;
-    if(incomingByte == 'I') bnoVerbose = !bnoVerbose;
+    if(incomingByte == 'I') bnoVerbose = !bnoVerbose ? VERY_VERBOSE : 0;
+    if(incomingByte == 'M') bnoVerbose = !bnoVerbose ? VERBOSE : 0;
     
     if(incomingByte == '~'){
       beamHold = !beamHold;
@@ -210,11 +214,11 @@ void loop() // run over and over
       int charsRead = listen_for_msg();
       
       if(charsRead != -1){
-        Serial.print(charsRead);
+        Serial.println(charsRead);
         Serial.print(msgBuf);
         clearMsgBuf();
       }else{
-        Serial.print(0);
+        Serial.println(0);
       }
     }
   }
@@ -231,11 +235,11 @@ void loop() // run over and over
     int charsRead = listen_for_msg();
     
     if(charsRead != -1){
-      Serial.print(charsRead);
+      Serial.println(charsRead);
       Serial.print(msgBuf);
       clearMsgBuf();
     }else{
-        Serial.print(0);
+        Serial.println(0);
     }
   }
 
@@ -812,39 +816,41 @@ void queryBNO(){
   Serial.print(euler.z());
   Serial.print("\t");
 
-  imu::Vector<3> grav = bno.getVector(Adafruit_BNO055::VECTOR_GRAVITY);
-
-  /* Display the floating point data */
-  Serial.print(" Gravity X: ");
-  Serial.print(grav.x());
-  Serial.print(" Gravity Y: ");
-  Serial.print(grav.y());
-  Serial.print(" Gravity Z: ");
-  Serial.print(grav.z());
-  Serial.print("\t");
-
-  imu::Vector<3> magnet = bno.getVector(Adafruit_BNO055::VECTOR_MAGNETOMETER);
-
-  /* Display the floating point data */
-  Serial.print(" Magnetic X: ");
-  Serial.print(magnet.x());
-  Serial.print(" Magnetic Y: ");
-  Serial.print(magnet.y());
-  Serial.print(" Magnetic Z: ");
-  Serial.print(magnet.z());
-  Serial.print("\t\t");
-
-  /* Display calibration status for each sensor. */
-  uint8_t system, gyro, accel, mag = 0;
-  bno.getCalibration(&system, &gyro, &accel, &mag);
-  Serial.print("CALIBRATION: Sys=");
-  Serial.print(system, DEC);
-  Serial.print(" Gyro=");
-  Serial.print(gyro, DEC);
-  Serial.print(" Accel=");
-  Serial.print(accel, DEC);
-  Serial.print(" Mag=");
-  Serial.println(mag, DEC);
+  if(bnoVerbose == VERY_VERBOSE){
+    imu::Vector<3> grav = bno.getVector(Adafruit_BNO055::VECTOR_GRAVITY);
+  
+    /* Display the floating point data */
+    Serial.print(" Gravity X: ");
+    Serial.print(grav.x());
+    Serial.print(" Gravity Y: ");
+    Serial.print(grav.y());
+    Serial.print(" Gravity Z: ");
+    Serial.print(grav.z());
+    Serial.print("\t");
+  
+    imu::Vector<3> magnet = bno.getVector(Adafruit_BNO055::VECTOR_MAGNETOMETER);
+  
+    /* Display the floating point data */
+    Serial.print(" Magnetic X: ");
+    Serial.print(magnet.x());
+    Serial.print(" Magnetic Y: ");
+    Serial.print(magnet.y());
+    Serial.print(" Magnetic Z: ");
+    Serial.print(magnet.z());
+    Serial.print("\t\t");
+  
+    /* Display calibration status for each sensor. */
+    uint8_t system, gyro, accel, mag = 0;
+    bno.getCalibration(&system, &gyro, &accel, &mag);
+    Serial.print("CALIBRATION: Sys=");
+    Serial.print(system, DEC);
+    Serial.print(" Gyro=");
+    Serial.print(gyro, DEC);
+    Serial.print(" Accel=");
+    Serial.print(accel, DEC);
+    Serial.print(" Mag=");
+    Serial.println(mag, DEC);
+  }
 }
 
 
