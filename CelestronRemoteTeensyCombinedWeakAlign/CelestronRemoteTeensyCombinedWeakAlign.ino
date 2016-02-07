@@ -14,6 +14,7 @@
  *  V - Toggles persistent output (continuously sends Q command, reporting position and sensor voltage)
  *  I - Toggles IMU readout
  *  M - Toggles less verbose IMU readout
+ *  C - Runs IMU/Celestron referencing routine
  *  
  *  Any single digit 0-9 - Sets default movement speed to that value (9 is fast, 4 is slow, 3 and below do not move)
  *  L - Azimuth motor turns left at default speed (and persists)
@@ -71,6 +72,7 @@ char msgBuf[MSG_BUF_LEN];
 
 #define POSMAX 16777216 //2^24; all angles are represented as 24 bit integers, and dividing by POSMAX converts to a fraction of a complete rotation
 #define POS_TOLERANCE 5000 //Max value two position values are allowed to deviate from each other while the system believes that they followed each other
+#define TEN_DEGREES_FROM_ZERO 466034 //Read the name, smartass
 
 /******** IMPORTANT ********/
 //If Serial seems to be breaking, adjust BITTIIME. The communication expects to run at 19200 baud, and depending on your microcontroller
@@ -87,8 +89,8 @@ char msgBuf[MSG_BUF_LEN];
 #define ALT 17
 #define RIGHT NEG + (2*AZM) //68 - Right is a negative azimuth movement
 #define LEFT POS + (2*AZM) //69 - Left is a positive azimuth movement
-#define DOWN NEG + (2*ALT) //70 - Down is a negative altitude movement, because logic is overrated
-#define UP POS + (2*ALT) //71 - Up is a positive azimuth movement
+#define DOWN NEG + (2*ALT) //70 - Down is a negative altitude movement
+#define UP POS + (2*ALT) //71 - Up is a positive altitude movement
 
 /*******************************************************************************/
 
@@ -183,8 +185,10 @@ void loop() // run over and over
     if(incomingByte == 'S') Serial.println(analogRead(SENSOR_PIN));
     if(incomingByte == 'G') celestronGoToPos(Serial.parseInt(),Serial.parseInt());
     if(incomingByte == 'V') vomitData = !vomitData;
-    if(incomingByte == 'I') bnoVerbose = !bnoVerbose ? VERY_VERBOSE : 0;
-    if(incomingByte == 'M') bnoVerbose = !bnoVerbose ? VERBOSE : 0;
+    if(incomingByte == 'I') bnoVerbose = bnoVerbose != VERY_VERBOSE ? VERY_VERBOSE : 0;
+    if(incomingByte == 'M') bnoVerbose = bnoVerbose != VERBOSE ? VERBOSE : 0;
+
+    if(incomingByte == 'C') correlateIMUandCelestron();
     
     if(incomingByte == '~'){
       beamHold = !beamHold;
@@ -804,11 +808,11 @@ void query(){
   Serial.print(' ');
   Serial.print(analogRead(SENSOR_PIN));
   Serial.print(' ');
-  if(bnoEnabled && bnoVerbose) queryBNO();
+  if(bnoEnabled && bnoVerbose) queryIMU();
   Serial.println();
 }
 
-void queryBNO(){
+void queryIMU(){
   imu::Vector<3> euler = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
 
   /* Display the floating point data */
@@ -842,19 +846,51 @@ void queryBNO(){
     Serial.print(" Magnetic Z: ");
     Serial.print(magnet.z());
     Serial.print("\t\t");
-  
-    /* Display calibration status for each sensor. */
-    uint8_t system, gyro, accel, mag = 0;
-    bno.getCalibration(&system, &gyro, &accel, &mag);
-    Serial.print("CALIBRATION: Sys=");
-    Serial.print(system, DEC);
-    Serial.print(" Gyro=");
-    Serial.print(gyro, DEC);
-    Serial.print(" Accel=");
-    Serial.print(accel, DEC);
-    Serial.print(" Mag=");
-    Serial.println(mag, DEC);
   }
+  
+  /* Display calibration status for each sensor. */
+  uint8_t system, gyro, accel, mag = 0;
+  bno.getCalibration(&system, &gyro, &accel, &mag);
+  Serial.print("C: Sys=");
+  Serial.print(system, DEC);
+  Serial.print(" Gyro=");
+  Serial.print(gyro, DEC);
+  Serial.print(" Accel=");
+  Serial.print(accel, DEC);
+  Serial.print(" Mag=");
+  Serial.println(mag, DEC);
+
+  float zeroAngles[2];
+  getPosFromIMU(zeroAngles);
 }
 
+void correlateIMUandCelestron(){
+  float zeroAngles[2], calAngles[2];
+  celestronGoToPos(0,0);
+  getPosFromIMU(zeroAngles);
+  celestronGoToPos(TEN_DEGREES_FROM_ZERO,TEN_DEGREES_FROM_ZERO);
+  getPosFromIMU(calAngles);
+  
+  //Fancy Math
+}
+
+void getPosFromIMU(float anglesToSet[2]){
+  
+  imu::Vector<3> euler = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
+  float azm = euler.x() + 90.0; //euler.x is CW Angle from east; almost transformed to represent CW angle from north
+  azm = azm > 360.0 ? azm - 360.0 : azm; //Corrects for part of angle range made over 360 by previous transformation
+
+  imu::Vector<3> grav = bno.getVector(Adafruit_BNO055::VECTOR_GRAVITY);
+  float alt = grav.z() > 0 ? 90.0 - euler.y() : euler.y() - 90.0; //Transforms alt to represent angle above/below horizon.
+                                                                  //Angles below are positive. It's not a bug; it's a feature
+  
+  anglesToSet[0] = azm;
+  anglesToSet[1] = alt;
+  if(bnoVerbose == VERBOSE || bnoVerbose == VERY_VERBOSE){
+    Serial.print(" Azm: ");
+    Serial.print(azm);
+    Serial.print(" Alt: ");
+    Serial.println(alt);
+  }
+}
 
