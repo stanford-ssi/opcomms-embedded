@@ -33,6 +33,9 @@
  *  < - Waits to receive message over PPM. HANGS PROGRAM UNTIL MESSAGE IS RECEIVED OR 10 SECONDS ELAPSE (whichever comes first. Timeout currently untested)
  *  W - Persistently waits to receive message over PPM. HANGS PROGRAM UNITL 10 SECONDS ELAPSE WITHOUT A MESSAGE (Timeout currently untested)
  *  
+ *  
+ *  + - Toggle analogRead precision
+ *  
  *****************************************************************/
 
 #define LASER 5
@@ -78,6 +81,9 @@ char msgBuf[MSG_BUF_LEN];
 //If Serial seems to be breaking, adjust BITTIIME. The communication expects to run at 19200 baud, and depending on your microcontroller
 //the time required to initiate a transition may eat into the ~50 uSec needed for each pulse
 
+#define HIGH_PRECISION 16
+#define STANDARD_PRECISION 10
+
 /*******************************************************************************/
 
 //Axis Command Constants
@@ -107,6 +113,7 @@ unsigned char charBuf[CHARBUFLEN];
 bool waitMode = false;
 bool beamHold = false;
 bool blinkMode = false;
+bool highPrecision = false;
 bool bnoEnabled = true; //True by default; if fails to enable, will be set to false. Initialize to false to completely disable
 char bnoVerbose = 0; //By default, do not print out position data when queried
 #define VERBOSE 1
@@ -135,6 +142,8 @@ void setup()
     Serial.print("Ooops, no BNO055 detected ... Check your wiring or I2C ADDR!");
     bnoEnabled = false;
   }
+
+  analogReadResolution(STANDARD_PRECISION);
 
 /*******************************************************************************/
 //Initialization code above this line is required for proper startup
@@ -170,6 +179,12 @@ void loop() // run over and over
 {
   if(Serial.available() > 0){
     byte incomingByte = Serial.read();
+
+    if(incomingByte == '+'){
+      highPrecision = !highPrecision;
+      analogReadResolution(highPrecision ? HIGH_PRECISION : STANDARD_PRECISION);
+      Serial.println(
+    }
     if(incomingByte == 'Q'){
       query();
     }
