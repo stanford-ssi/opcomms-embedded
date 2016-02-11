@@ -179,8 +179,7 @@ void loop() // run over and over
     if(incomingByte == 'D') celestronDriveMotor(DOWN, globalSpeed);
     if(incomingByte == 'R') celestronDriveMotor(RIGHT, globalSpeed);
     if(incomingByte == 'X'){
-      celestronDriveMotor(UP, 0);
-      celestronDriveMotor(LEFT, 0);
+      celestronStopCmd();
     }
     if(incomingByte == 'S') Serial.println(analogRead(SENSOR_PIN));
     if(incomingByte == 'G') celestronGoToPos(Serial.parseInt(),Serial.parseInt());
