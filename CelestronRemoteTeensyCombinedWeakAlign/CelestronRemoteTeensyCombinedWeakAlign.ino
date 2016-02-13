@@ -141,6 +141,7 @@ void setup()
     /* There was a problem detecting the BNO055 ... check your connections */
     Serial.print("Ooops, no BNO055 detected ... Check your wiring or I2C ADDR!");
     bnoEnabled = false;
+    bno.setMode((Adafruit_BNO055::adafruit_bno055_opmode_t)0x0A); //Initializes IMU to ignore gyro, because gyros suck
   }
 
   analogReadResolution(STANDARD_PRECISION);
@@ -183,7 +184,6 @@ void loop() // run over and over
     if(incomingByte == '+'){
       highPrecision = !highPrecision;
       analogReadResolution(highPrecision ? HIGH_PRECISION : STANDARD_PRECISION);
-      Serial.println(
     }
     if(incomingByte == 'Q'){
       query();
@@ -874,25 +874,33 @@ void queryIMU(){
   Serial.print(" Mag=");
   Serial.println(mag, DEC);
 
-  float zeroAngles[2];
-  getPosFromIMU(zeroAngles);
+  float meaninglessVector[3];
+
+  if(bnoVerbose == VERY_VERBOSE){
+    getPosFromIMU(meaninglessVector);
+  }
+  
 }
 
 void correlateIMUandCelestron(){
-  float zeroAngles[2], calAngles[2];
-  celestronGoToPos(0,0);
-  getPosFromIMU(zeroAngles);
-  celestronGoToPos(TEN_DEGREES_FROM_ZERO,TEN_DEGREES_FROM_ZERO);
-  getPosFromIMU(calAngles);
+  float zeroAngles[3];
+
+  if(celestronGetPos(AZM) != 0 || celestronGetPos(ALT) != 0) Serial.println("Power Cycle Arm To Set To Zero!");
+
+  digitalWrite(LED, HIGH);
+  while(celestronGetPos(AZM) != 0 || celestronGetPos(ALT) != 0){} //Stall annoyingly
+  digitalWrite(LED, LOW);
   
-  //Fancy Math
+  getPosFromIMU(zeroAngles);
+
 }
 
-void getPosFromIMU(float anglesToSet[2]){
+void getPosFromIMU(float anglesToSet[3]){
   
   imu::Vector<3> euler = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
   float azm = euler.x() + 90.0; //euler.x is CW Angle from east; almost transformed to represent CW angle from north
   azm = azm > 360.0 ? azm - 360.0 : azm; //Corrects for part of angle range made over 360 by previous transformation
+  float roll = euler.y(); //No clue if this works
 
   imu::Vector<3> grav = bno.getVector(Adafruit_BNO055::VECTOR_GRAVITY);
   float alt = grav.z() > 0 ? 90.0 - euler.y() : euler.y() - 90.0; //Transforms alt to represent angle above/below horizon.
@@ -900,11 +908,15 @@ void getPosFromIMU(float anglesToSet[2]){
   
   anglesToSet[0] = azm;
   anglesToSet[1] = alt;
+  anglesToSet[2] = roll;
+  
   if(bnoVerbose == VERBOSE || bnoVerbose == VERY_VERBOSE){
     Serial.print(" Azm: ");
     Serial.print(azm);
     Serial.print(" Alt: ");
-    Serial.println(alt);
+    Serial.print(alt);
+    Serial.print(" Roll: ");
+    Serial.println(roll);
   }
 }
 
