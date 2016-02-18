@@ -114,6 +114,8 @@ bool waitMode = false;
 bool beamHold = false;
 bool blinkMode = false;
 bool highPrecision = false;
+
+bool saveCoefficientsEnabled = false; //Dangerous; safety must be disabled prior to attempting
 bool bnoEnabled = true; //True by default; if fails to enable, will be set to false. Initialize to false to completely disable
 char bnoVerbose = 0; //By default, do not print out position data when queried
 #define VERBOSE 1
@@ -141,7 +143,7 @@ void setup()
     /* There was a problem detecting the BNO055 ... check your connections */
     Serial.print("Ooops, no BNO055 detected ... Check your wiring or I2C ADDR!");
     bnoEnabled = false;
-    bno.setMode((Adafruit_BNO055::adafruit_bno055_opmode_t)0x0A); //Initializes IMU to ignore gyro, because gyros suck
+    bno.setMode(bno.OPERATION_MODE_M4G); //Initializes IMU to ignore gyro, because gyros suck
   }
 
   analogReadResolution(STANDARD_PRECISION);
@@ -152,17 +154,11 @@ void setup()
 
 //Startup LED blink
 
-  digitalWrite(LED, HIGH);
-  delay(1000);
-  digitalWrite(LED,LOW);
+  blinkLED(1000);
   delay(200);
-  digitalWrite(LED, HIGH);
+  blinkLED(200);
   delay(200);
-  digitalWrite(LED,LOW);
-  delay(200);
-  digitalWrite(LED, HIGH);
-  delay(200);
-  digitalWrite(LED,LOW);
+  blinkLED(200);
   delay(200);
 
   long azmTarget = 1000000;
@@ -201,8 +197,20 @@ void loop() // run over and over
     if(incomingByte == 'V') vomitData = !vomitData;
     if(incomingByte == 'I') bnoVerbose = bnoVerbose != VERY_VERBOSE ? VERY_VERBOSE : 0;
     if(incomingByte == 'M') bnoVerbose = bnoVerbose != VERBOSE ? VERBOSE : 0;
-
+    
+    if(incomingByte == '|'){
+      if(saveCoefficientsEnabled){
+        saveCalibrationCoefficients(); //DON'T DO IT UNLESS YOU KNOW WHAT YOU'RE DOING
+      }else{
+        saveCoefficientsEnabled = true;
+        if(bnoVerbose) Serial.println("Arming calibration coefficient readout; type \'|\' again to complete");
+      }
+    }else if(saveCoefficientsEnabled){
+      saveCoefficientsEnabled = false; //If previously armed but subsequent character not '|,' disarm
+    }
+    
     if(incomingByte == 'C') correlateIMUandCelestron();
+    
     
     if(incomingByte == '~'){
       beamHold = !beamHold;
@@ -917,6 +925,37 @@ void getPosFromIMU(float anglesToSet[3]){
     Serial.print(alt);
     Serial.print(" Roll: ");
     Serial.println(roll);
+  }
+}
+
+void saveCalibrationCoefficients(){
+
+  uint8_t system, gyro, accel, mag = 0;
+  bno.getCalibration(&system, &gyro, &accel, &mag);
+
+  if(system + gyro + accel + mag == 12){ //Each = 3 if properly calibrated
+    
+    bno.setMode(bno.OPERATION_MODE_CONFIG);
+
+    //Adafruit_BNO055::adafruit_bno055_reg_t registerAddr;
+    
+    for(uint8_t registerAddr = bno.ACCEL_OFFSET_X_LSB_ADDR ; registerAddr <= bno.MAG_RADIUS_MSB_ADDR; registerAddr++){
+
+      byte calVal =  (bno.read8(registerAddr));
+      if(bnoVerbose == VERY_VERBOSE) Serial.println(calVal);
+    }
+    
+    bno.setMode(bno.OPERATION_MODE_M4G);
+    
+  }else{ //Angrily blink to inform user system is not fully calibrated
+    blinkLED(400 - (system * 100));
+    delay(100);
+    blinkLED(400 - (gyro * 100));
+    delay(100);
+    blinkLED(400 - (accel * 100));
+    delay(100);
+    blinkLED(400 - (mag * 100));
+    delay(100);
   }
 }
 
