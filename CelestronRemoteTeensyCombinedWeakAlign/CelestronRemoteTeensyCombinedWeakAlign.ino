@@ -1,7 +1,7 @@
 #include <Wire.h>
 #include <Adafruit_Sensor.h>
-#include <Adafruit_BNO055.h>
-#include <utility/imumaths.h>
+#include "Adafruit_BNO055_SSI.h"
+#include "utility/imumaths.h"
 
 /*****************************************************************
  * 
@@ -937,13 +937,15 @@ void saveCalibrationCoefficients(){
     
     bno.setMode(bno.OPERATION_MODE_CONFIG);
 
-    //Adafruit_BNO055::adafruit_bno055_reg_t registerAddr;
+    Adafruit_BNO055::adafruit_bno055_reg_t registerAddr = bno.ACCEL_OFFSET_X_LSB_ADDR;
     
-    for(uint8_t registerAddr = bno.ACCEL_OFFSET_X_LSB_ADDR ; registerAddr <= bno.MAG_RADIUS_MSB_ADDR; registerAddr++){
+    //for(registerAddr = bno.ACCEL_OFFSET_X_LSB_ADDR ; registerAddr <= bno.MAG_RADIUS_MSB_ADDR; registerAddr++){
 
-      byte calVal =  (bno.read8(registerAddr));
-      if(bnoVerbose == VERY_VERBOSE) Serial.println(calVal);
-    }
+    //bno.read8(bno.ACCEL_OFFSET_X_LSB_ADDR);
+
+    //byte calVal
+    //if(bnoVerbose == VERY_VERBOSE) Serial.println(calVal);
+    //}
     
     bno.setMode(bno.OPERATION_MODE_M4G);
     
