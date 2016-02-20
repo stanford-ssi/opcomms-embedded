@@ -258,6 +258,9 @@ class Adafruit_BNO055 : public Adafruit_Sensor
     bool  getEvent  ( sensors_event_t* );
     void  getSensor ( sensor_t* );
 
+    /* SSI Library addition */
+    void  queryCalibrationConstants ( unsigned char* calibrationValues );
+
   private:
     byte  read8   ( adafruit_bno055_reg_t );
     bool  readLen ( adafruit_bno055_reg_t, byte* buffer, uint8_t len );

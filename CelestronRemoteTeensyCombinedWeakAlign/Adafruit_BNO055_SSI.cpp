@@ -397,6 +397,22 @@ bool Adafruit_BNO055::getEvent(sensors_event_t *event)
   return true;
 }
 
+/**************************************************************************/
+/*!
+    @brief  Reads the sensor's IMU calibration values and stores them in an array
+*/
+/**************************************************************************/
+void Adafruit_BNO055::queryCalibrationConstants ( byte* calibrationValues ){
+
+  adafruit_bno055_reg_t registerAddr = ACCEL_OFFSET_X_LSB_ADDR; //First calibration constant
+  
+  for(byte i = 0; i < 22; i++){
+    registerAddr = (adafruit_bno055_reg_t)(registerAddr + (i)); //Very questionable
+    
+    calibrationValues[i] = read8(registerAddr);
+  }
+}
+
 /***************************************************************************
  PRIVATE FUNCTIONS
  ***************************************************************************/

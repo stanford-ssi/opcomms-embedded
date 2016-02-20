@@ -1,7 +1,12 @@
+//Wire packages by default with Arduino
 #include <Wire.h>
-#include <Adafruit_Sensor.h>
+
+//Included dependencies
 #include "Adafruit_BNO055_SSI.h"
 #include "utility/imumaths.h"
+
+//MUST BE DOWNLOADED
+#include <Adafruit_Sensor.h>
 
 /*****************************************************************
  * 
@@ -43,7 +48,7 @@
 #define SENSOR_PIN A0
 #define MSG_BUF_LEN 1024
 
-//These are not explicitly constant because they should be field configurable
+//These are not explicitly constant because they are field configurable
 int highTime = 100; //us
 int lowTime = 100; //us
 int sampleTime = 10; //Should be ~10us less than a factor of lowTime
@@ -100,6 +105,8 @@ char msgBuf[MSG_BUF_LEN];
 
 /*******************************************************************************/
 
+//Don't touch; these are pulled straight from Adafruit example code
+
 #define BNO055_SAMPLERATE_DELAY_MS (100)
 Adafruit_BNO055 bno = Adafruit_BNO055();
 
@@ -116,6 +123,8 @@ bool blinkMode = false;
 bool highPrecision = false;
 
 bool saveCoefficientsEnabled = false; //Dangerous; safety must be disabled prior to attempting
+byte calibrationValues[22];
+
 bool bnoEnabled = true; //True by default; if fails to enable, will be set to false. Initialize to false to completely disable
 char bnoVerbose = 0; //By default, do not print out position data when queried
 #define VERBOSE 1
@@ -143,9 +152,9 @@ void setup()
     /* There was a problem detecting the BNO055 ... check your connections */
     Serial.print("Ooops, no BNO055 detected ... Check your wiring or I2C ADDR!");
     bnoEnabled = false;
-    bno.setMode(bno.OPERATION_MODE_M4G); //Initializes IMU to ignore gyro, because gyros suck
   }
 
+  bno.setMode(bno.OPERATION_MODE_M4G); //Initializes IMU to ignore gyro, because gyros suck
   analogReadResolution(STANDARD_PRECISION);
 
 /*******************************************************************************/
@@ -937,17 +946,11 @@ void saveCalibrationCoefficients(){
     
     bno.setMode(bno.OPERATION_MODE_CONFIG);
 
-    Adafruit_BNO055::adafruit_bno055_reg_t registerAddr = bno.ACCEL_OFFSET_X_LSB_ADDR;
-    
-    //for(registerAddr = bno.ACCEL_OFFSET_X_LSB_ADDR ; registerAddr <= bno.MAG_RADIUS_MSB_ADDR; registerAddr++){
+    bno.queryCalibrationConstants(calibrationValues);
 
-    //bno.read8(bno.ACCEL_OFFSET_X_LSB_ADDR);
-
-    //byte calVal
-    //if(bnoVerbose == VERY_VERBOSE) Serial.println(calVal);
-    //}
-    
     bno.setMode(bno.OPERATION_MODE_M4G);
+
+    blinkLED(2000); //Long blink to indicate successful coefficient storage
     
   }else{ //Angrily blink to inform user system is not fully calibrated
     blinkLED(400 - (system * 100));
