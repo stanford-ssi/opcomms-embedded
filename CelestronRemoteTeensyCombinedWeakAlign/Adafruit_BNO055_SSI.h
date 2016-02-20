@@ -260,6 +260,7 @@ class Adafruit_BNO055 : public Adafruit_Sensor
 
     /* SSI Library addition */
     void  queryCalibrationConstants ( unsigned char* calibrationValues );
+    void  assignCalibrationConstants ( unsigned char* calibrationValues );
 
   private:
     byte  read8   ( adafruit_bno055_reg_t );

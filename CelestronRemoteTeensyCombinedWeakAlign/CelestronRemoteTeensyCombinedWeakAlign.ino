@@ -1,5 +1,6 @@
-//Wire packages by default with Arduino
+//Packages by default with Arduino
 #include <Wire.h>
+#include <EEPROM.h>
 
 //Included dependencies
 #include "Adafruit_BNO055_SSI.h"
@@ -47,6 +48,8 @@
 #define N_BITS 2
 #define SENSOR_PIN A0
 #define MSG_BUF_LEN 1024
+
+#define AUTOBOOT_IMU true
 
 //These are not explicitly constant because they are field configurable
 int highTime = 100; //us
@@ -123,6 +126,7 @@ bool blinkMode = false;
 bool highPrecision = false;
 
 bool saveCoefficientsEnabled = false; //Dangerous; safety must be disabled prior to attempting
+bool loadCoefficientsEnabled = false; //Dangerous; safety must be disabled prior to attempting
 byte calibrationValues[22];
 
 bool bnoEnabled = true; //True by default; if fails to enable, will be set to false. Initialize to false to completely disable
@@ -154,7 +158,11 @@ void setup()
     bnoEnabled = false;
   }
 
-  bno.setMode(bno.OPERATION_MODE_M4G); //Initializes IMU to ignore gyro, because gyros suck
+  if(bnoEnabled){
+    bno.setMode(bno.OPERATION_MODE_M4G); //Initializes IMU to ignore gyro, because gyros suck
+    if(AUTOBOOT_IMU) loadCalibrationConstants(); //Load calibration constants from the EEPROM automatically if requested
+  }
+  
   analogReadResolution(STANDARD_PRECISION);
 
 /*******************************************************************************/
@@ -209,13 +217,24 @@ void loop() // run over and over
     
     if(incomingByte == '|'){
       if(saveCoefficientsEnabled){
-        saveCalibrationCoefficients(); //DON'T DO IT UNLESS YOU KNOW WHAT YOU'RE DOING
+        saveCalibrationConstants(); //DON'T DO IT UNLESS YOU KNOW WHAT YOU'RE DOING
       }else{
         saveCoefficientsEnabled = true;
-        if(bnoVerbose) Serial.println("Arming calibration coefficient readout; type \'|\' again to complete");
+        if(bnoVerbose) Serial.println("Arming calibration constant readout; type \'|\' again to complete");
       }
     }else if(saveCoefficientsEnabled){
       saveCoefficientsEnabled = false; //If previously armed but subsequent character not '|,' disarm
+    }
+
+    if(incomingByte == '\\'){ //Actually just a '\' - it has to be "escaped"
+      if(loadCoefficientsEnabled){
+        loadCalibrationConstants();
+      }else{
+        loadCoefficientsEnabled = true;
+        if(bnoVerbose) Serial.println("Arming calibration constant loading; type \'\\\' again to complete");
+      }
+    }else if(loadCoefficientsEnabled){
+      loadCoefficientsEnabled = false; //If previously armed but subsequent character not '\,' disarm
     }
     
     if(incomingByte == 'C') correlateIMUandCelestron();
@@ -844,18 +863,22 @@ void query(){
 }
 
 void queryIMU(){
-  imu::Vector<3> euler = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
 
-  /* Display the floating point data */
-  Serial.print("X: ");
-  Serial.print(euler.x());
-  Serial.print(" Y: ");
-  Serial.print(euler.y());
-  Serial.print(" Z: ");
-  Serial.print(euler.z());
-  Serial.print("\t");
+  float tempVector[3];
+  getPosFromIMU(tempVector);
 
   if(bnoVerbose == VERY_VERBOSE){
+    imu::Vector<3> euler = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
+
+    /* Display the floating point data */
+    Serial.print("X: ");
+    Serial.print(euler.x());
+    Serial.print(" Y: ");
+    Serial.print(euler.y());
+    Serial.print(" Z: ");
+    Serial.print(euler.z());
+    Serial.print("\t");
+  
     imu::Vector<3> grav = bno.getVector(Adafruit_BNO055::VECTOR_GRAVITY);
   
     /* Display the floating point data */
@@ -877,24 +900,18 @@ void queryIMU(){
     Serial.print(" Magnetic Z: ");
     Serial.print(magnet.z());
     Serial.print("\t\t");
-  }
-  
-  /* Display calibration status for each sensor. */
-  uint8_t system, gyro, accel, mag = 0;
-  bno.getCalibration(&system, &gyro, &accel, &mag);
-  Serial.print("C: Sys=");
-  Serial.print(system, DEC);
-  Serial.print(" Gyro=");
-  Serial.print(gyro, DEC);
-  Serial.print(" Accel=");
-  Serial.print(accel, DEC);
-  Serial.print(" Mag=");
-  Serial.println(mag, DEC);
 
-  float meaninglessVector[3];
-
-  if(bnoVerbose == VERY_VERBOSE){
-    getPosFromIMU(meaninglessVector);
+    /* Display calibration status for each sensor. */
+    uint8_t system, gyro, accel, mag = 0;
+    bno.getCalibration(&system, &gyro, &accel, &mag);
+    Serial.print("C: Sys=");
+    Serial.print(system, DEC);
+    Serial.print(" Gyro=");
+    Serial.print(gyro, DEC);
+    Serial.print(" Accel=");
+    Serial.print(accel, DEC);
+    Serial.print(" Mag=");
+    Serial.println(mag, DEC);
   }
   
 }
@@ -927,7 +944,7 @@ void getPosFromIMU(float anglesToSet[3]){
   anglesToSet[1] = alt;
   anglesToSet[2] = roll;
   
-  if(bnoVerbose == VERBOSE || bnoVerbose == VERY_VERBOSE){
+  if(bnoVerbose){
     Serial.print(" Azm: ");
     Serial.print(azm);
     Serial.print(" Alt: ");
@@ -937,7 +954,7 @@ void getPosFromIMU(float anglesToSet[3]){
   }
 }
 
-void saveCalibrationCoefficients(){
+void saveCalibrationConstants(){
 
   uint8_t system, gyro, accel, mag = 0;
   bno.getCalibration(&system, &gyro, &accel, &mag);
@@ -947,6 +964,13 @@ void saveCalibrationCoefficients(){
     bno.setMode(bno.OPERATION_MODE_CONFIG);
 
     bno.queryCalibrationConstants(calibrationValues);
+
+    for(int i = 0; i < 22; i++){
+      if(bnoVerbose == VERY_VERBOSE) Serial.println(calibrationValues[i], DEC);
+      EEPROM.write(i, calibrationValues[i]);
+      blinkLED(100);
+      delay(100);
+    }
 
     bno.setMode(bno.OPERATION_MODE_M4G);
 
@@ -962,5 +986,20 @@ void saveCalibrationCoefficients(){
     blinkLED(400 - (mag * 100));
     delay(100);
   }
+}
+
+void loadCalibrationConstants(){
+  
+  for(int i = 0; i < 22; i++){
+    calibrationValues[i] = EEPROM.read(i);
+    if(bnoVerbose == VERY_VERBOSE) Serial.println(calibrationValues[i], DEC);
+    blinkLED(100);
+    delay(100);
+  }
+
+  bno.setMode(bno.OPERATION_MODE_CONFIG);
+  bno.assignCalibrationConstants(calibrationValues);
+  bno.setMode(bno.OPERATION_MODE_M4G);
+  
 }
 
