@@ -49,7 +49,8 @@
 #define SENSOR_PIN A0
 #define MSG_BUF_LEN 1024
 
-#define AUTOBOOT_IMU true
+#define AUTOBOOT_IMU true //Set true if calibration values should be loaded by default
+//#define AUTOBOOT_IMU false
 
 //These are not explicitly constant because they are field configurable
 int highTime = 100; //us
@@ -159,7 +160,7 @@ void setup()
   }
 
   if(bnoEnabled){
-    bno.setMode(bno.OPERATION_MODE_M4G); //Initializes IMU to ignore gyro, because gyros suck
+    //bno.setMode(bno.OPERATION_MODE_NDOF); //Initializes IMU to ignore gyro, because gyros suck //DOESN'T ACTUALLY WORK lol
     if(AUTOBOOT_IMU) loadCalibrationConstants(); //Load calibration constants from the EEPROM automatically if requested
   }
   
@@ -934,7 +935,7 @@ void getPosFromIMU(float anglesToSet[3]){
   imu::Vector<3> euler = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
   float azm = euler.x() + 90.0; //euler.x is CW Angle from east; almost transformed to represent CW angle from north
   azm = azm > 360.0 ? azm - 360.0 : azm; //Corrects for part of angle range made over 360 by previous transformation
-  float roll = euler.y(); //No clue if this works
+  float roll = 90 - euler.z(); //Gives unsigned degrees off of vertical, which is about all you need
 
   imu::Vector<3> grav = bno.getVector(Adafruit_BNO055::VECTOR_GRAVITY);
   float alt = grav.z() > 0 ? 90.0 - euler.y() : euler.y() - 90.0; //Transforms alt to represent angle above/below horizon.
@@ -972,7 +973,7 @@ void saveCalibrationConstants(){
       delay(100);
     }
 
-    bno.setMode(bno.OPERATION_MODE_M4G);
+    bno.setMode(bno.OPERATION_MODE_NDOF);
 
     blinkLED(2000); //Long blink to indicate successful coefficient storage
     
