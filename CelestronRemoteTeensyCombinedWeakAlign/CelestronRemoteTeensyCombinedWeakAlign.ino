@@ -49,8 +49,8 @@
 #define SENSOR_PIN A0
 #define MSG_BUF_LEN 1024
 
-#define AUTOBOOT_IMU true //Set true if calibration values should be loaded by default
-//#define AUTOBOOT_IMU false
+//#define AUTOBOOT_IMU true //Set true if calibration values should be loaded by default
+#define AUTOBOOT_IMU false
 
 //These are not explicitly constant because they are field configurable
 int highTime = 100; //us
@@ -77,6 +77,19 @@ char msgBuf[MSG_BUF_LEN];
 
 #define EN_PIN 4 //Additional line that both Celestron and the board pull down when they are sending data over the TX/RX line
 #define LED 13 //LED pin
+
+#define LED_R 17
+#define LED_G 16
+#define LED_B 15
+
+#define LED_OFF     0b000
+#define LED_RED     0b001
+#define LED_GREEN   0b010
+#define LED_BLUE    0b100
+#define LED_YELLOW  0b011
+#define LED_PURPLE  0b101
+#define LED_TEAL    0b110
+#define LED_WHITE   0b111
 
 #define BITTIME 50 //Time to transmit a bit, in microseconds, Teensy version 
 //#define BITTIME 45 //Time to transmit a bit, in microseconds, Arduino version 
@@ -144,12 +157,14 @@ void setup()
   pinMode(TX, OUTPUT);
   pinMode(RX, INPUT_PULLUP);
   pinMode(LED, OUTPUT);
+  pinMode(LED_R, OUTPUT);
+  pinMode(LED_G, OUTPUT);
+  pinMode(LED_B, OUTPUT);
   pinMode(LASER, OUTPUT);
   
   digitalWrite(EN_PIN, HIGH);
   digitalWrite(TX, HIGH);
-
-  randomSeed(analogRead(A2));
+  ledColor(LED_OFF);
 
   /* Initialise the orientation sensor */
   if(!bnoEnabled || !bno.begin())
@@ -172,12 +187,7 @@ void setup()
 
 //Startup LED blink
 
-  blinkLED(1000);
-  delay(200);
-  blinkLED(200);
-  delay(200);
-  blinkLED(200);
-  delay(200);
+  ledParty();
 
   long azmTarget = 1000000;
   long altTarget = 1000000;
@@ -1002,5 +1012,29 @@ void loadCalibrationConstants(){
   bno.assignCalibrationConstants(calibrationValues);
   bno.setMode(bno.OPERATION_MODE_M4G);
   
+}
+
+void ledColor(byte color){
+  digitalWrite(LED_R, !(0b1 & color));
+  digitalWrite(LED_G, !(0b10 & color));
+  digitalWrite(LED_B, !(0b100 & color));
+}
+
+void ledParty(){
+  ledColor(LED_RED);
+    delay(100);
+    ledColor(LED_YELLOW);
+    delay(100);
+    ledColor(LED_GREEN);
+    delay(100);
+    ledColor(LED_TEAL);
+    delay(100);
+    ledColor(LED_BLUE);
+    delay(100);
+    ledColor(LED_PURPLE);
+    delay(100);
+    ledColor(LED_WHITE);
+    delay(100);
+    ledColor(LED_OFF);
 }
 
