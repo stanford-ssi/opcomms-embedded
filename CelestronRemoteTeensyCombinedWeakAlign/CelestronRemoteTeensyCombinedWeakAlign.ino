@@ -15,6 +15,7 @@
  *  
  *  <value> means that value is sent, with no spaces or < > characters
  *  
+ *  H<number> - engages hypersampling mode, which averages the specified number of samples before returning a value. "H1" returns the system to normal behavior
  *  Q - Returns Azimuth Position <space> Altitude Position <space> Voltage on Analog 0 (connected to sensor)
  *  S - Returns only voltage on Analog 0 (connected to sensor)
  *  V - Toggles persistent output (continuously sends Q command, reporting position and sensor voltage)
@@ -31,6 +32,8 @@
  *  G<azmPos>,<altPos> - Drives arm to specified position. HANGS PROGRAM UNTIL POSITION IS REACHED
  *  
  *  ~ - Turns on/off beam hold, keeping laser on persistently
+ *    ~0 - Turns beam off
+ *    ~1 - Turns beam on
  *  ! - Turns on 1 Hz laser pulse
  *  B - Blinks LED on board. HANGS PROGRAM FOR 200 ms
  *  
@@ -39,8 +42,9 @@
  *  < - Waits to receive message over PPM. HANGS PROGRAM UNTIL MESSAGE IS RECEIVED OR 10 SECONDS ELAPSE (whichever comes first. Timeout currently untested)
  *  W - Persistently waits to receive message over PPM. HANGS PROGRAM UNITL 10 SECONDS ELAPSE WITHOUT A MESSAGE (Timeout currently untested)
  *  
- *  
  *  + - Toggle analogRead precision
+ *  
+ *  * - Wastes time, flashes pretty colors
  *  
  *****************************************************************/
 
@@ -52,12 +56,14 @@
 //#define AUTOBOOT_IMU true //Set true if calibration values should be loaded by default
 #define AUTOBOOT_IMU false
 
-//These are not explicitly constant because they are field configurable
+//These are not explicitly constant because they are nominally field configurable
 int highTime = 100; //us
 int lowTime = 100; //us
 int sampleTime = 10; //Should be ~10us less than a factor of lowTime
 int sampleTimeShiftVal = 2; //Rightshifting is much cheaper than dividing; 2^this is how many samples per interval
 int sensorThreshold = 8;
+
+int hypersample = 1; //Number of samples to be taken during each sampleSensor() call; this is explicitly intended to be changed during operation
 
 #define WAIT_FOR_MSG_TIMEOUT 500000 //us
 
@@ -220,7 +226,7 @@ void loop() // run over and over
     if(incomingByte == 'X'){
       celestronStopCmd();
     }
-    if(incomingByte == 'S') Serial.println(analogRead(SENSOR_PIN));
+    if(incomingByte == 'S') Serial.println(sampleSensor());
     if(incomingByte == 'G') celestronGoToPos(Serial.parseInt(),Serial.parseInt());
     if(incomingByte == 'V') vomitData = !vomitData;
     if(incomingByte == 'I') bnoVerbose = bnoVerbose != VERY_VERBOSE ? VERY_VERBOSE : 0;
@@ -250,9 +256,12 @@ void loop() // run over and over
     
     if(incomingByte == 'C') correlateIMUandCelestron();
     
-    
     if(incomingByte == '~'){
-      beamHold = !beamHold;
+      if(Serial.available() && (Serial.peek() == '0' || Serial.peek() == '1')){ //Check if next char specifies a laser state; otherwise, ~ behaves normally
+        beamHold = Serial.read() == '1'; //If a 0 or 1 is sent, remove it from the Serial buffer so it doesn't get processed next, and set beamHold accordingly
+      }else{
+        beamHold = !beamHold;
+      }
       blinkMode = false;
     }
     if(incomingByte == '!'){
@@ -318,7 +327,7 @@ void loop() // run over and over
    }
 }
 
-//Call before beginning a command to configure pins
+//Call to configure pins before beginning a command 
 void beginCmd(){ //Reconfigure pins to prepare to transmit
   pinMode(EN_PIN, OUTPUT);
   pinMode(TX, OUTPUT);
@@ -327,7 +336,7 @@ void beginCmd(){ //Reconfigure pins to prepare to transmit
 }
 
 
-//Call when ending a command to configure pins
+//Call to configure pins when ending a command
 void endCmd(){
   pinMode(EN_PIN, INPUT_PULLUP); //Hi-Z pin, but pull up - EN is normally high and only pulled low when receiving (Celestron pulls low) or transmitting
   pinMode(TX, INPUT_PULLUP); //Hi-Z pin, but pull up - Same as above
@@ -867,10 +876,25 @@ void query(){
   Serial.print(' ');
   Serial.print(celestronGetPos(ALT));
   Serial.print(' ');
-  Serial.print(analogRead(SENSOR_PIN));
+  Serial.print(sampleSensor());
   Serial.print(' ');
   if(bnoEnabled && bnoVerbose) queryIMU();
   Serial.println();
+}
+
+int sampleSensor(){
+  long sumOfSamples; //hacky solution to allow many samples to be safely added together before averaging
+  
+  for(int samples = 0; samples < hypersample; samples++){
+    sumOfSamples += analogRead(SENSOR_PIN);
+  }
+
+  //Don't waste the time to divide if hypersample is a 1, and catch errors if some dumbass - sorry, user - set hypersample to 0
+  int averagedValue = hypersample > 1 ? sumOfSamples/(long(hypersample)) : sumOfSamples; //Use longs to try and get more precision
+
+  if(hypersample < 1) blinkLED(500); //Indicate hypersample is out of spec and is being ignored
+
+  return averagedValue;
 }
 
 void queryIMU(){
