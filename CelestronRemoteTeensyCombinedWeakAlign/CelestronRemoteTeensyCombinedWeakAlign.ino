@@ -17,6 +17,7 @@
  *  
  *  H<number> - engages hypersampling mode, which averages the specified number of samples before returning a value. "H1" returns the system to normal behavior
  *  Q - Returns Azimuth Position <space> Altitude Position <space> Voltage on Analog 0 (connected to sensor)
+ *  Z - Returns Azimuth Position <space> Altitude Position <space> Voltage on Analog 0 (connected to sensor), with no error checking on position from the arm
  *  S - Returns only voltage on Analog 0 (connected to sensor)
  *  V - Toggles persistent output (continuously sends Q command, reporting position and sensor voltage)
  *  I - Toggles IMU readout
@@ -215,16 +216,15 @@ void loop() // run over and over
       highPrecision = !highPrecision;
       analogReadResolution(highPrecision ? HIGH_PRECISION : STANDARD_PRECISION);
     }
-    if(incomingByte == 'Q'){
-      query();
-    }
+    if(incomingByte == 'Q') query();
+    if(incomingByte == 'Z') query(true);
     if(incomingByte - '0' <= 9 && incomingByte - '0' >= 1) globalSpeed = incomingByte - '0';
     if(incomingByte == 'L') celestronDriveMotor(LEFT, globalSpeed);
     if(incomingByte == 'U') celestronDriveMotor(UP, globalSpeed);
     if(incomingByte == 'D') celestronDriveMotor(DOWN, globalSpeed);
     if(incomingByte == 'R') celestronDriveMotor(RIGHT, globalSpeed);
     if(incomingByte == 'X'){
-      celestronStopCmd();
+      celestronStopCmd(false);
     }
     if(incomingByte == 'S') Serial.println(sampleSensor());
     if(incomingByte == 'G') celestronGoToPos(Serial.parseInt(),Serial.parseInt());
@@ -293,7 +293,6 @@ void loop() // run over and over
         int desiredSampling = Serial.parseInt();
         if(desiredSampling > 1) hypersample = desiredSampling;
       }
-      
     }
     
     if(incomingByte == '<'){
@@ -308,6 +307,11 @@ void loop() // run over and over
       }else{
         Serial.println(0);
       }
+    }
+
+    if(incomingByte == '*'){
+      while(!Serial.available) ledParty();
+      ledColor(LED_OFF);
     }
   }
   digitalWrite(LASER,beamHold ? HIGH : LOW);
@@ -400,10 +404,12 @@ void celestronDriveMotor(char dir, int spd){
   
 }
 
-
 //Command to get angular position on the specified axis
-long celestronGetPos(char axis){
+long celestronGetPos(char axis, bool dangerous = false){
   long verifyPos = celestronRoughGetPos(axis);
+
+  if(dangerous) return verifyPos; //Fuck error checking
+  
   long tentativePos = verifyPos + POS_TOLERANCE + 1; //Make value guaranteed to fail test
   
   while(abs(verifyPos-tentativePos) > POS_TOLERANCE){ //If positions are not within tolerance, keep polling
@@ -431,10 +437,14 @@ long celestronRoughGetPos(char axis){
   return celestronListenForResponse(20); //Spend 20 milliseconds paused while reading back the queried position
 }
 
-void celestronStopCmd(){ //Stop motion in both axes and wait 600 mSec for them to come to a halt
+void celestronStopCmd(){
+  celestronStopCmd(true);
+}
+
+void celestronStopCmd(bool shouldWait){ //Stop motion in both axes and wait 600 mSec for them to come to a halt
   celestronDriveMotor(LEFT,0);
   celestronDriveMotor(UP,0);
-  delay(600);
+  if(shouldWait)delay(600);
 }
 
 void celestronGoToPos(long azmPos, long altPos){
@@ -882,9 +892,13 @@ void blinkLED(int onTimeIn_ms){
 }
 
 void query(){
-  Serial.print(celestronGetPos(AZM));
+  query(false);
+}
+
+void query(bool dangerous){
+  Serial.print(celestronGetPos(AZM, dangerous));
   Serial.print(' ');
-  Serial.print(celestronGetPos(ALT));
+  Serial.print(celestronGetPos(ALT, dangerous));
   Serial.print(' ');
   Serial.print(sampleSensor());
   Serial.print(' ');
@@ -1055,7 +1069,7 @@ void ledColor(byte color){
 }
 
 void ledParty(){
-  ledColor(LED_RED);
+    ledColor(LED_RED);
     delay(100);
     ledColor(LED_YELLOW);
     delay(100);
