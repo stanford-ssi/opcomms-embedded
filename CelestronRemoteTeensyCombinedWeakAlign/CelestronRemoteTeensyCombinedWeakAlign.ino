@@ -285,6 +285,16 @@ void loop() // run over and over
       clearMsgBuf();
     }
     if(incomingByte == 'W') waitMode = !waitMode;
+
+    if(incomingByte == 'H'){
+      hypersample = 1;
+      
+      if(Serial.available()){ //Don't try to parse an int if there is no more material in the Serial buffer
+        int desiredSampling = Serial.parseInt();
+        if(desiredSampling > 1) hypersample = desiredSampling;
+      }
+      
+    }
     
     if(incomingByte == '<'){
       Serial.println("Waiting for msg:");
