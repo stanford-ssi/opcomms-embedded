@@ -310,7 +310,7 @@ void loop() // run over and over
     }
 
     if(incomingByte == '*'){
-      while(!Serial.available) ledParty();
+      while(!Serial.available()) ledParty();
       ledColor(LED_OFF);
     }
   }
