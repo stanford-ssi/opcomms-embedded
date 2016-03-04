@@ -7,8 +7,10 @@ void blinkLED(){
 //Turns LED on pin 13 on for a specified period of time
 void blinkLED(int onTimeIn_ms){
   digitalWrite(LED, HIGH);
+  ledColor(LED_RED);
   delay(onTimeIn_ms);
   digitalWrite(LED, LOW);
+  ledColor(LED_OFF);
 }
 
 

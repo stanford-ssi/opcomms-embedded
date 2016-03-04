@@ -20,6 +20,7 @@
  *  V - Toggles persistent output (continuously sends Q command, reporting position and sensor voltage)
  *  I - Toggles IMU readout
  *  M - Toggles less verbose IMU readout
+ *  F - Program offsets for IMU (reset to 0 at startup)
  *  
  *  Any single digit 0-9 - Sets default movement speed to that value (9 is fast, 4 is slow, 3 and below do not move)
  *  L - Azimuth motor turns left at default speed (and persists)
@@ -28,6 +29,7 @@
  *  D - Altitude motor turns down at default speed (and persists)
  *  X - Both motors stop (creates 600ms delay to acheive full stop)
  *  G<azmPos>,<altPos> - Drives arm to specified position. HANGS PROGRAM UNTIL POSITION IS REACHED
+ *  E<azmPos>,<altPos> - Drives arm to specified position using IMU. HANGS PROGRAM UNTIL POSITION IS REACHED
  *  
  *  ~ - Turns on/off beam hold, keeping laser on persistently
  *    ~0 - Turns beam off
@@ -53,6 +55,9 @@
 
 #define AUTOBOOT_IMU true //Set true if calibration values should be loaded by default
 //#define AUTOBOOT_IMU false
+
+#define DEBUG true //I'm lazy; debug mode turns on a number of useful things automatically during setup
+//#define DEBUG false
 
 //These are not explicitly constant because they are nominally field configurable
 int highTime = 100; //us
@@ -119,6 +124,7 @@ char msgBuf[MSG_BUF_LEN];
 #define NEG '$' //36 - rotationally, defined as clockwise
 #define AZM 16
 #define ALT 17
+#define ROLL 18 //Mostly useless; just useful for an IMU position readout method
 #define RIGHT NEG + (2*AZM) //68 - Right is a negative azimuth movement
 #define LEFT POS + (2*AZM) //69 - Left is a positive azimuth movement
 #define DOWN NEG + (2*ALT) //70 - Down is a negative altitude movement
@@ -145,12 +151,21 @@ bool highPrecision = false;
 
 bool saveCoefficientsEnabled = false; //Dangerous; safety must be disabled prior to attempting
 bool loadCoefficientsEnabled = false; //Dangerous; safety must be disabled prior to attempting
-byte calibrationValues[22];
 
 bool bnoEnabled = true; //True by default; if fails to enable, will be set to false. Initialize to false to completely disable
+#define IMU_GOTO_MAX_RECURSIONS 1
+double imuAzmOffset = 0.0;
+double imuAltOffset = 0.0;
 char bnoVerbose = 0; //By default, do not print out position data when queried
 #define VERBOSE 1
 #define VERY_VERBOSE 2
+
+int globalSpeed = 9;
+bool vomitData = false;
+bool blinkState = 0;
+
+long currentAzm = -1;
+long currentAlt = -1;
 
 void setup()
 {
@@ -185,6 +200,12 @@ void setup()
   
   analogReadResolution(STANDARD_PRECISION);
 
+  if(DEBUG){
+    vomitData = true;
+    bnoVerbose = VERY_VERBOSE;
+    beamHold = true;
+  }
+
 /*******************************************************************************/
 //Initialization code above this line is required for proper startup
 //Code below is optional
@@ -196,13 +217,6 @@ void setup()
   long azmTarget = 1000000;
   long altTarget = 1000000;
 }
-
-int globalSpeed = 9;
-bool vomitData = false;
-bool blinkState = 0;
-
-long currentAzm = -1;
-long currentAlt = -1;
 
 void loop() // run over and over
 {
@@ -220,14 +234,18 @@ void loop() // run over and over
     if(incomingByte == 'U') celestronDriveMotor(UP, globalSpeed);
     if(incomingByte == 'D') celestronDriveMotor(DOWN, globalSpeed);
     if(incomingByte == 'R') celestronDriveMotor(RIGHT, globalSpeed);
-    if(incomingByte == 'X'){
-      celestronStopCmd(false);
-    }
+    if(incomingByte == 'X') celestronStopCmd(false);
+    
     if(incomingByte == 'S') Serial.println(sampleSensor());
     if(incomingByte == 'G') celestronGoToPos(Serial.parseInt(),Serial.parseInt());
+    if(incomingByte == 'E') imuGoToPos(double(Serial.parseFloat()),double(Serial.parseFloat()),0);
     if(incomingByte == 'V') vomitData = !vomitData;
     if(incomingByte == 'I') bnoVerbose = bnoVerbose != VERY_VERBOSE ? VERY_VERBOSE : 0;
     if(incomingByte == 'M') bnoVerbose = bnoVerbose != VERBOSE ? VERBOSE : 0;
+    if(incomingByte == 'F'){ //Allows for programming of offsets for IMU to correct for assorted errors
+      imuAzmOffset = double(Serial.parseFloat());
+      imuAltOffset = double(Serial.parseFloat());
+    }
     
     if(incomingByte == '|'){
       if(saveCoefficientsEnabled){

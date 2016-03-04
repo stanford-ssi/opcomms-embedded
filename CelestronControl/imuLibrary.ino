@@ -7,17 +7,33 @@ void queryIMU(){
     if(bnoVerbose){
       /* Display the floating point data */
       Serial.print("X: ");
-      Serial.print(event.orientation.x, 4);
-      Serial.print("\tY: ");
-      Serial.print(event.orientation.y, 4);
+      Serial.print(getIMUPos(AZM), 4);
+      Serial.print('(');
+      Serial.print(imuAzmOffset, 4);
+      Serial.print(")\tY: ");
+      Serial.print(getIMUPos(ROLL), 4);
       Serial.print("\tZ: ");
-      Serial.print(event.orientation.z, 4);
+      Serial.print(getIMUPos(ALT), 4);
+      Serial.print('(');
+      Serial.print(imuAltOffset, 4);
+      Serial.print(')');
       displayCalStatus();
-    }
-    
-    /* New line for the next sample */
-    Serial.println("");
+
+      /* New line for the next sample */
+      Serial.println("");
+    }    
 }
+
+double getIMUPos(char axis){
+  sensors_event_t event;
+  bno.getEvent(&event);
+
+  if(axis == ALT) return constrain( ((-event.orientation.z)-90.0) + imuAltOffset, -90.0, 90.0 ) ; //Get altitude reading from IMU, shifted to account for how the IMU actually reports values
+  if(axis == AZM) return constrain( event.orientation.x + imuAzmOffset, 0.0, 360.0 ); //Get azimuth reading, reporting in the proper range after the offset is added
+  if(axis == ROLL) return event.orientation.y; //Get roll reading, which is pretty useless but still nice to report
+  return 0.0;
+}
+
 
 void saveCalibrationConstants(){
 
@@ -104,6 +120,7 @@ void loadCalibrationConstants(){
         delay(BNO055_SAMPLERATE_DELAY_MS);
     }
     digitalWrite(LED, LOW);
+    
     Serial.println("\nFully calibrated!");
     Serial.println("--------------------------------");
     Serial.println("Calibration Results: ");
@@ -112,6 +129,104 @@ void loadCalibrationConstants(){
     displaySensorOffsets(newCalib);
   }
 }
+
+
+//Version of the celestronGoToPos, except driven by IMU readings
+void imuGoToPos(double azmPos, double altPos, int recursions){
+  double currAzmPos = getIMUPos(AZM);
+  double currAltPos = getIMUPos(ALT);
+  double errorAzm = imuCalcSmallestError(currAzmPos, azmPos);
+  double errorAlt = imuCalcSmallestError(currAltPos, altPos);
+
+  int goodAlign = 0;
+  digitalWrite(LED, LOW);
+  
+  while(goodAlign < 2){
+    goodAlign = 0;
+    currAzmPos = getIMUPos(AZM);
+    currAltPos = getIMUPos(ALT);
+    double lastErrorAzm = errorAzm;
+    double lastErrorAlt = errorAlt;
+    errorAzm = imuCalcSmallestError(currAzmPos, azmPos);
+    errorAlt = imuCalcSmallestError(currAltPos, altPos);
+    Serial.print('@');
+    Serial.print(currAzmPos,4);
+    Serial.print(',');
+    Serial.println(currAltPos,4);
+    Serial.print("Delta Azm/Alt: ");
+    Serial.print(errorAzm,4);
+    Serial.print('\t');
+    Serial.println(errorAlt,4);
+
+    if(errorAzm == 0 || abs(errorAzm-lastErrorAzm) < (0.25 * double(abs(lastErrorAzm)))){
+      if(errorAzm < -1.0){
+        celestronDriveMotor(LEFT, 9);
+      }else if(errorAzm > 1.0){
+        celestronDriveMotor(RIGHT, 9);
+      }else if(errorAzm < -0.5){
+        celestronDriveMotor(LEFT, 7);
+      }else if(errorAzm > 0.5){
+        celestronDriveMotor(RIGHT, 7);
+      }else{
+        celestronDriveMotor(RIGHT, 0);
+        goodAlign++;
+      }
+    }else{
+      Serial.print("AZM Transient ");
+      Serial.print(errorAzm);
+      Serial.print(' ');
+      Serial.print(lastErrorAzm);
+      Serial.print(' ');
+      Serial.println(0.2 * double(lastErrorAzm));
+      celestronDriveMotor(RIGHT, 0);
+    }
+
+    if(errorAlt == 0 || abs(errorAlt-lastErrorAlt) < (0.25 * double(abs(lastErrorAlt)))){
+      if(errorAlt < -1.0){
+        celestronDriveMotor(DOWN, 9); //Note that these directions are flipped relative to the Celestron version
+      }else if(errorAlt > 1.0){
+        celestronDriveMotor(UP, 9);
+      }else if(errorAlt < -0.5){
+        celestronDriveMotor(DOWN, 7);
+      }else if(errorAlt > 0.5){
+        celestronDriveMotor(UP, 7);
+      }else{
+        celestronDriveMotor(DOWN, 0);
+        goodAlign++;
+      }
+    }else{
+      Serial.print("ALT Transient ");
+      Serial.print(errorAlt);
+      Serial.print(' ');
+      Serial.print(lastErrorAlt);
+      Serial.print(' ');
+      Serial.println(0.2 * double(lastErrorAlt));
+      celestronDriveMotor(DOWN, 0);
+    }
+    
+    Serial.println();
+    delay(25);
+  }
+  
+  if(recursions < IMU_GOTO_MAX_RECURSIONS){ //Up to a defined limit, wait a couple of seconds after aligning for the IMU to settle down and then try to align again
+    blinkLED(5000);
+    imuGoToPos(azmPos, altPos, recursions+1);
+  }else{
+    Serial.println("Aligned!");
+  }
+}
+
+//Figures out whether going in the normal direction or rolling over is shorter
+double imuCalcSmallestError(double currentPos, double targetPos){
+
+  if(currentPos == targetPos) return 0; //DON'T MOVE
+  
+  double upDistance = (currentPos < targetPos) ? targetPos - currentPos : 360.0 - (currentPos-targetPos); //If target is greater than current, going up is easy; otherwise you have to wrap around
+  double downDistance = (currentPos > targetPos) ? targetPos - currentPos : (targetPos-currentPos) - 360.0; //If target is lesser than current, going down is easy; otherwise you have to wrap around
+  
+  return (abs(upDistance) < abs(downDistance)) ? upDistance : downDistance;
+}
+
 
 /**************************************************************************/
 /*
