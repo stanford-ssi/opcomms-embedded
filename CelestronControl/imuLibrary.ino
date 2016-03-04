@@ -1,93 +1,22 @@
 void queryIMU(){
 
-  float tempVector[3];
-  getPosFromIMU(tempVector);
+    /* Get a new sensor event */
+    sensors_event_t event;
+    bno.getEvent(&event);
 
-  if(bnoVerbose == VERY_VERBOSE){
-    imu::Vector<3> euler = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
-
-    /* Display the floating point data */
-    Serial.print("X: ");
-    Serial.print(euler.x());
-    Serial.print(" Y: ");
-    Serial.print(euler.y());
-    Serial.print(" Z: ");
-    Serial.print(euler.z());
-    Serial.print("\t");
-  
-    imu::Vector<3> grav = bno.getVector(Adafruit_BNO055::VECTOR_GRAVITY);
-  
-    /* Display the floating point data */
-    Serial.print(" Gravity X: ");
-    Serial.print(grav.x());
-    Serial.print(" Gravity Y: ");
-    Serial.print(grav.y());
-    Serial.print(" Gravity Z: ");
-    Serial.print(grav.z());
-    Serial.print("\t");
-  
-    imu::Vector<3> magnet = bno.getVector(Adafruit_BNO055::VECTOR_MAGNETOMETER);
-  
-    /* Display the floating point data */
-    Serial.print(" Magnetic X: ");
-    Serial.print(magnet.x());
-    Serial.print(" Magnetic Y: ");
-    Serial.print(magnet.y());
-    Serial.print(" Magnetic Z: ");
-    Serial.print(magnet.z());
-    Serial.print("\t\t");
-
-    /* Display calibration status for each sensor. */
-    uint8_t system, gyro, accel, mag = 0;
-    bno.getCalibration(&system, &gyro, &accel, &mag);
-    Serial.print("C: Sys=");
-    Serial.print(system, DEC);
-    Serial.print(" Gyro=");
-    Serial.print(gyro, DEC);
-    Serial.print(" Accel=");
-    Serial.print(accel, DEC);
-    Serial.print(" Mag=");
-    Serial.println(mag, DEC);
-  }
-  
-}
-
-void correlateIMUandCelestron(){
-  float zeroAngles[3];
-
-  if(celestronGetPos(AZM,false) != 0 || celestronGetPos(ALT,false) != 0) Serial.println("Power Cycle Arm To Set To Zero!");
-
-  digitalWrite(LED, HIGH);
-  while(celestronGetPos(AZM,false) != 0 || celestronGetPos(ALT,false) != 0){} //Stall annoyingly
-  digitalWrite(LED, LOW);
-  
-  getPosFromIMU(zeroAngles);
-
-}
-
-void getPosFromIMU(float anglesToSet[3]){
-  
-  imu::Vector<3> euler = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
-  float azm = euler.x() + 90.0; //euler.x is CW Angle from east; almost transformed to represent CW angle from north
-  azm = azm > 360.0 ? azm - 360.0 : azm; //Corrects for part of angle range made over 360 by previous transformation
-  float roll = 90 - euler.z(); //Gives unsigned degrees off of vertical, which is about all you need
-
-  imu::Vector<3> grav = bno.getVector(Adafruit_BNO055::VECTOR_GRAVITY);
-  float alt = grav.z() > 0 ? 90.0 - euler.y() : euler.y() - 90.0; //Transforms alt to represent angle above/below horizon.
-                                                                  //Angles below are positive. It's not a bug; it's a feature
-  
-  anglesToSet[0] = azm;
-  anglesToSet[1] = alt;
-  anglesToSet[2] = roll;
-  
-  if(bnoVerbose){
-    Serial.print(" Azm: ");
-    Serial.print(azm);
-    Serial.print(" Alt: ");
-    Serial.print(alt);
-    Serial.print(" Roll: ");
-    Serial.println(roll);
-  }
+    if(bnoVerbose){
+      /* Display the floating point data */
+      Serial.print("X: ");
+      Serial.print(event.orientation.x, 4);
+      Serial.print("\tY: ");
+      Serial.print(event.orientation.y, 4);
+      Serial.print("\tZ: ");
+      Serial.print(event.orientation.z, 4);
+      displayCalStatus();
+    }
+    
+    /* New line for the next sample */
+    Serial.println("");
 }
 
 void saveCalibrationConstants(){
@@ -167,14 +96,20 @@ void loadCalibrationConstants(){
   sensors_event_t event;
   bno.getEvent(&event);
   if (foundCalib){
-      Serial.println("Move sensor slightly to calibrate magnetometers");
-      digitalWrite(LED, HIGH);
-      while (!bno.isFullyCalibrated())
-      {
-          bno.getEvent(&event);
-          delay(BNO055_SAMPLERATE_DELAY_MS);
-      }
-      digitalWrite(LED, LOW);
+    Serial.println("Move sensor slightly to calibrate magnetometers");
+    digitalWrite(LED, HIGH);
+    while (!bno.isFullyCalibrated())
+    {
+        bno.getEvent(&event);
+        delay(BNO055_SAMPLERATE_DELAY_MS);
+    }
+    digitalWrite(LED, LOW);
+    Serial.println("\nFully calibrated!");
+    Serial.println("--------------------------------");
+    Serial.println("Calibration Results: ");
+    adafruit_bno055_offsets_t newCalib;
+    bno.getSensorOffsets(newCalib);
+    displaySensorOffsets(newCalib);
   }
 }
 

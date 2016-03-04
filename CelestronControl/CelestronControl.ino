@@ -20,7 +20,6 @@
  *  V - Toggles persistent output (continuously sends Q command, reporting position and sensor voltage)
  *  I - Toggles IMU readout
  *  M - Toggles less verbose IMU readout
- *  C - Runs IMU/Celestron referencing routine
  *  
  *  Any single digit 0-9 - Sets default movement speed to that value (9 is fast, 4 is slow, 3 and below do not move)
  *  L - Azimuth motor turns left at default speed (and persists)
@@ -130,7 +129,7 @@ char msgBuf[MSG_BUF_LEN];
 //Don't touch; these are pulled straight from Adafruit example code
 
 #define BNO055_SAMPLERATE_DELAY_MS (100)
-Adafruit_BNO055 bno = Adafruit_BNO055();
+Adafruit_BNO055 bno = Adafruit_BNO055(55); 
 
 /*******************************************************************************/
 
@@ -251,8 +250,6 @@ void loop() // run over and over
     }else if(loadCoefficientsEnabled){
       loadCoefficientsEnabled = false; //If previously armed but subsequent character not '\,' disarm
     }
-    
-    if(incomingByte == 'C') correlateIMUandCelestron();
     
     if(incomingByte == '~'){
       if(Serial.available() && (Serial.peek() == '0' || Serial.peek() == '1')){ //Check if next char specifies a laser state; otherwise, ~ behaves normally
