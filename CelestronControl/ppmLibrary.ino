@@ -75,7 +75,8 @@ int listen_for_msg(){
 
     //The 4 here needs to be changed to accept a different PPM value and I couldn't think of a smart way of doing it in advance
     for(int i = 0; i < 4; i++){
-      delayMicroseconds(highTime); //Let start pulse pass
+      //delayMicroseconds(highTime); //Let start pulse pass
+      //delayMicroseconds(idleTime); //Let start pulse pass
       samplesCounted = 0;
 
       while(checkSensor(SENSOR_PIN)==1){
@@ -153,6 +154,8 @@ void clearMsgBuf(){
 void blink_Packet(char* buffer, int len)
 {   
     //Encodes and transmits each character
+    blink(0); //For Mjolnir
+    
     for (int i=0; i < len; i++) {
         blink_char(buffer[i]);
     }
@@ -183,7 +186,6 @@ void blink_char(char c) {
         pulses the light to transmit data
 */
 void blink(int data) {
-    //Serial.println(data);
     //Time on = PULSE_LENGTH
     digitalWrite(LASER,HIGH);
     delayMicroseconds(highTime);
@@ -191,6 +193,7 @@ void blink(int data) {
     //Time off = PULSE_LENGTH*(data value)
     //  For example, a 01 transmitted would have a difference between pulses of 2 PULSE_LENGTH
     digitalWrite(LASER,LOW);
+    delayMicroseconds(idleTime);
     delayMicroseconds(lowTime*(data+1));
     digitalWrite(LASER,HIGH);
 } 

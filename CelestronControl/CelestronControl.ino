@@ -60,9 +60,10 @@
 //#define DEBUG false
 
 //These are not explicitly constant because they are nominally field configurable
-int highTime = 100; //us
-int lowTime = 100; //us
-int sampleTime = 10; //Should be ~10us less than a factor of lowTime
+int highTime = 8; //[us]
+int idleTime = 85; //[us]
+int lowTime = 100; //[us]
+int sampleTime = 12; //[us]
 int sampleTimeShiftVal = 2; //Rightshifting is much cheaper than dividing; 2^this is how many samples per interval
 int sensorThreshold = 800;
 
