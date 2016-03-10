@@ -56,7 +56,7 @@
 #define AUTOBOOT_IMU true //Set true if calibration values should be loaded by default
 //#define AUTOBOOT_IMU false
 
-#define DEBUG true //I'm lazy; debug mode turns on a number of useful things automatically during setup
+#define DEBUG false //I'm lazy; debug mode turns on a number of useful things automatically during setup
 //#define DEBUG false
 
 //These are not explicitly constant because they are nominally field configurable
