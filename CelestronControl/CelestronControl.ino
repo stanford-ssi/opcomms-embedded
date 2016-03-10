@@ -169,7 +169,7 @@ long currentAlt = -1;
 
 void setup()
 {
-  analogReference(INTERNAL);
+  //analogReference(INTERNAL);
   Serial.begin(250000);
 
   pinMode(EN_PIN, OUTPUT);
