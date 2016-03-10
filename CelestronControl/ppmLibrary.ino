@@ -78,7 +78,7 @@ int listen_for_msg(){
       delayMicroseconds(highTime); //Let start pulse pass
       samplesCounted = 0;
 
-      while(checkSensor(SENSOR_PIN)==1){
+      while(checkSensor(SENSOR_PIN)==1 && samplesCounted < 100){
         samplesCounted++;
       }
       if(samplesCounted > 20){
