@@ -294,7 +294,9 @@ void loop() // run over and over
     if(incomingByte == '>'){
       int msgLen = Serial.available(); //Counts number of bytes to be sent
       Serial.readBytes(msgBuf, msgLen);
-      blink_Packet(msgBuf, msgLen);
+      //blink_Packet(msgBuf, msgLen);
+      Serial.println("Transmitting with Hardware Interrupts");
+      transmit_msg(msgBuf, msgLen);
       clearMsgBuf();
     }
     if(incomingByte == 'W') waitMode = !waitMode;

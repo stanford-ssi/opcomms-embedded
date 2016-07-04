@@ -216,3 +216,129 @@ void query(bool dangerous){
   if(bnoEnabled && bnoVerbose) queryIMU();
   Serial.println();
 }
+
+
+
+
+
+//*******Below is the alternative transmit interrupt code******************
+IntervalTimer transmit_timer;
+static const int buffer_size = 256;
+const int clock_offset = 14;
+volatile int msg_buffer[buffer_size] = {0};
+volatile int buffer_location = 0;
+volatile int time_waited = 0;
+volatile int msg_length = 0;
+volatile bool laser_on = false;
+volatile bool transmitting = false;
+volatile unsigned long last_period = 0;
+volatile unsigned long transmit_period = 300 + clock_offset;
+
+void transmit_msg(char* msg, int m_length){
+  noInterrupts();
+  if(transmitting){
+    Serial.println("Currently Transmitting, please try again");
+    return;
+  }
+  if(m_length*4+6>buffer_size){
+    msg_length = buffer_size-4; //-4 to account for EOF char, while still staying divisible by 4.
+  }else{
+    msg_length = m_length*4;
+  }
+  Serial.println(msg);
+  for(int i=0; i<msg_length/4; i++){
+       Serial.print(msg[i]);
+       Serial.print(" encoded to: ");
+      
+       for(int j=3; j>=0; j--){
+        msg_buffer[i*4+3-j] = ((msg[i]&(0b11<<j*2))>>j*2);
+        Serial.print(msg_buffer[i*4+3-j]);
+        //Bit mask each value in the ascii char, then shift it back to only two bits.
+        //Place the values in the proper order in the buffer
+       }
+       Serial.println("");
+  }
+  msg_buffer[msg_length] = (0b1<<N_BITS)+1 +1; //Encodes the EOF wait time at end of buffer.
+  Serial.print("Added eof: ");
+  Serial.println((0b1<<N_BITS)+1);
+  transmit_timer.begin(transmit_timer_tick, transmit_period);
+  transmitting = true;
+  interrupts(); //For some reason the interrupts() flag doesn't work. Used the above boolean instead.
+}
+
+void transmit_timer_tick(){
+  noInterrupts();
+  if(!transmitting) return;
+  Serial.print("Time: ");
+  Serial.print(micros()-last_period); 
+  bool eom = buffer_location>msg_length-1;
+  Serial.print(" buffer location: "); 
+  Serial.print(buffer_location);
+  Serial.print(" time waited: ");
+  Serial.print(time_waited);
+  Serial.println(laser_on);
+  Serial.println(eom);
+
+  if(laser_on){
+    digitalWrite(LASER,LOW);
+    laser_on = false;
+  }else{
+    digitalWrite(LASER,HIGH);
+    laser_on = true;
+  }
+  
+  digitalWrite(LASER,HIGH);
+  delayMicroseconds(100);
+  digitalWrite(LASER,LOW);
+  
+  last_period = micros();
+  interrupts();
+  return;
+/*
+  if(time_waited == 0){//Just got to this buffer_location, send starting pulse
+    digitalWrite(LASER, HIGH);
+    laser_on = true;
+    time_waited++;
+    
+    last_period = micros();
+    interrupts(); 
+    return;
+  }
+  if(time_waited>0 & laser_on & !eom){//Finish the starting pulse, if EOM keep the laser on for the long pulse.
+    digitalWrite(LASER,LOW);
+    laser_on = false;
+  }
+  if(time_waited > msg_buffer[buffer_location]){//Have waited the appropriate pulse time, finish with this bit.
+    time_waited = 0;
+    buffer_location++;
+    if(eom){//Finished EOM signal, time to wrap up all the transmition stuff.
+      digitalWrite(LASER,LOW);
+      laser_on=false;
+      reset_buffer();
+      transmitting = false;
+      transmit_timer.end();
+    }
+    
+    last_period = micros();
+    interrupts(); 
+    return;
+  }
+  //If we get to here that means, 1.Didn't just start. 2.Haven't waited long enough.
+  time_waited++;
+  last_period = micros();
+  interrupts(); 
+
+  */
+}
+
+
+
+void reset_buffer(){
+  for( int i=0; i<buffer_size; i++){
+    msg_buffer[i] = 0;
+  }
+  buffer_location = 0;
+  time_waited = 0;
+  msg_length = 0;
+}
+
