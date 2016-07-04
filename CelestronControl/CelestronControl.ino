@@ -6,7 +6,7 @@
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BNO055.h>
 #include <utility/imumaths.h>
-#include "nelder_mead.h"
+//#include "nelder_mead.h" //TODO: Uncomment for Alignment
 
 /*****************************************************************
  *
@@ -251,14 +251,14 @@ void loop() // run over and over
       imuAltOffset = double(Serial.parseFloat());
     }
     if(incomingByte == 'A'){
-      alignAFS();
+      //alignAFS();
     }
     if(incomingByte == 'b') {
-      double powah = getBeaconPower();
-      Serial.println(powah);
+      //double powah = getBeaconPower();
+      //Serial.println(powah);
     }
     if(incomingByte == 'l') {
-      alignBeacon();
+      //alignBeacon();
     }
 
     if(incomingByte == '|'){
@@ -309,9 +309,9 @@ void loop() // run over and over
     if(incomingByte == '>'){
       int msgLen = Serial.available(); //Counts number of bytes to be sent
       Serial.readBytes(msgBuf, msgLen);
-      //blink_Packet(msgBuf, msgLen);
-      Serial.println("now sending via interrupts");
-      transmit_msg(msgBuf);
+      blink_Packet(msgBuf, msgLen);
+      //Serial.println("now sending via interrupts");
+      //transmit_msg(msgBuf);
       clearMsgBuf();
     }
     /*

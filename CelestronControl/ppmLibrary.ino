@@ -1,3 +1,5 @@
+int idleTime = 0; //TODO: REMOVE IDLE TIME. SHOULD NEVER IDLE
+
 void defineParameters(){
   Serial.println("Input pulse time (us; blank for 100): ");
   while(!Serial.available());
@@ -223,18 +225,19 @@ void query(bool dangerous){
 
 //*******Below is the alternative transmit interrupt code******************
 IntervalTimer transmit_timer;
-volatile int buffer_size = 256;
+static const int buffer_size = 256;
 volatile int msg_buffer[buffer_size] = {0};
 volatile int buffer_location = 0;
 volatile int time_waited = 0;
 volatile int msg_length = 0;
 volatile bool laser_on = false;
+volatile bool transmitting = false;
 int transmit_period = 100;
 
 void transmit_msg(String msg){
   noInterrupts();
   if(transmitting){
-    Serial.println("Currently Transmitting, please try again")
+    Serial.println("Currently Transmitting, please try again");
     return;
   }
   transmitting = true;
@@ -250,7 +253,7 @@ void transmit_msg(String msg){
        }
   }
   msg_length = msg.length();
-  msg_buffer[msg.length] = (0b1<<N_BITS)+1; //Encodes the EOF wait time at end of buffer.
+  msg_buffer[msg.length()] = (0b1<<N_BITS)+1; //Encodes the EOF wait time at end of buffer.
   transmit_timer.begin(transmit_timer_tick, transmit_period);
   interrupts();
 }
@@ -293,7 +296,7 @@ void transmit_timer_tick(){
 
 void reset_buffer(){
   for( int i=0; i<buffer_size; i++){
-    msg_buffer[i] = 0
+    msg_buffer[i] = 0;
   }
   buffer_location = 0;
   time_waited = 0;
