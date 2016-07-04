@@ -299,4 +299,3 @@ void reset_buffer(){
   time_waited = 0;
   msg_length = 0;
 }
-
