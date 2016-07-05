@@ -221,10 +221,20 @@ void query(bool dangerous){
 
 
 
-//*******Below is the alternative transmit interrupt code******************
-IntervalTimer transmit_timer;
+//*******Below is the alternative transmit interrupt code***************************************************************
+//**********************************************************************************************************************
+//**********************************************************************************************************************
+//**********************************************************************************************************************
+//**********************************************************************************************************************
+
+
+//Swapping to Timer1 library: http://www.pjrc.com/teensy/td_libs_TimerOne.html
+
+
+
+//IntervalTimer transmit_timer;
 static const int buffer_size = 256;
-const int clock_offset = 14;
+const int clock_offset = 0;
 volatile int msg_buffer[buffer_size] = {0};
 volatile int buffer_location = 0;
 volatile int time_waited = 0;
@@ -232,14 +242,27 @@ volatile int msg_length = 0;
 volatile bool laser_on = false;
 volatile bool transmitting = false;
 volatile unsigned long last_period = 0;
-volatile unsigned long transmit_period = 300 + clock_offset;
+#include <TimerOne.h>
+volatile unsigned long transmit_period = 400;
+//volatile unsigned long transmit_period = 100;// + clock_offset;
+
+//void hi_setup(){
+//  Timer1.initialize(transmit_period);
+//  Timer1.attachInterrupt(transmit_timer_tick);
+//  Timer1.stop();
+//}
 
 void transmit_msg(char* msg, int m_length){
-  noInterrupts();
+  cli();
+  noInterrupts()
   if(transmitting){
     Serial.println("Currently Transmitting, please try again");
+    interrupts(); //For some reason the interrupts() flag doesn't work. Used the above boolean instead.
+    sei();
     return;
   }
+  
+  
   if(m_length*4+6>buffer_size){
     msg_length = buffer_size-4; //-4 to account for EOF char, while still staying divisible by 4.
   }else{
@@ -261,39 +284,45 @@ void transmit_msg(char* msg, int m_length){
   msg_buffer[msg_length] = (0b1<<N_BITS)+1 +1; //Encodes the EOF wait time at end of buffer.
   Serial.print("Added eof: ");
   Serial.println((0b1<<N_BITS)+1);
-  transmit_timer.begin(transmit_timer_tick, transmit_period);
+  //transmit_timer.begin(transmit_timer_tick, transmit_period);
   transmitting = true;
+  //Timer1.start();
   interrupts(); //For some reason the interrupts() flag doesn't work. Used the above boolean instead.
+  sei();
 }
 
 void transmit_timer_tick(){
   noInterrupts();
-  if(!transmitting) return;
-  Serial.print("Time: ");
+  bool local_laser = laser_on;
+  cli();
+  //if((micros()-last_period)<100) return;
+  //if(!transmitting) return;
+  //Serial.print("Time: ");
   Serial.print(micros()-last_period); 
-  bool eom = buffer_location>msg_length-1;
-  Serial.print(" buffer location: "); 
-  Serial.print(buffer_location);
-  Serial.print(" time waited: ");
-  Serial.print(time_waited);
+  //bool eom = buffer_location>msg_length-1;
+  //Serial.print(" buffer location: "); 
+  //Serial.print(buffer_location);
+  //Serial.print(" time waited: ");
+  //Serial.print(time_waited);
   Serial.println(laser_on);
-  Serial.println(eom);
+  //Serial.println(eom);
 
-  if(laser_on){
-    digitalWrite(LASER,LOW);
-    laser_on = false;
-  }else{
-    digitalWrite(LASER,HIGH);
-    laser_on = true;
-  }
-  
-  digitalWrite(LASER,HIGH);
-  delayMicroseconds(100);
-  digitalWrite(LASER,LOW);
+  digitalWrite(LASER,laser_on);
+  laser_on = !laser_on;
+//  if(local_laser){
+//    digitalWrite(LASER,LOW);
+//    laser_on = false;
+//  }else{
+//    digitalWrite(LASER,HIGH);
+//    laser_on = true;
+//  }
+  //delayMicroseconds(35);
   
   last_period = micros();
   interrupts();
+  sei();
   return;
+  
 /*
   if(time_waited == 0){//Just got to this buffer_location, send starting pulse
     digitalWrite(LASER, HIGH);

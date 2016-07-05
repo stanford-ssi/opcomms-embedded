@@ -167,11 +167,19 @@ bool blinkState = 0;
 long currentAzm = -1;
 long currentAlt = -1;
 
+#include <TimerOne.h>
+
 void setup()
 {
   //analogReference(INTERNAL);
   Serial.begin(250000);
 
+  Timer1.initialize(100);
+  Timer1.attachInterrupt(transmit_timer_tick);
+  Timer1.start();
+  
+
+  
   pinMode(EN_PIN, OUTPUT);
   pinMode(TX, OUTPUT);
   pinMode(RX, INPUT_PULLUP);
@@ -220,6 +228,8 @@ void setup()
 
 void loop() // run over and over
 {
+ 
+
   if(Serial.available() > 0){
     byte incomingByte = Serial.read();
 
@@ -296,7 +306,8 @@ void loop() // run over and over
       Serial.readBytes(msgBuf, msgLen);
       //blink_Packet(msgBuf, msgLen);
       Serial.println("Transmitting with Hardware Interrupts");
-      transmit_msg(msgBuf, msgLen);
+      //transmit_msg(msgBuf, msgLen);
+      Timer1.stop();
       clearMsgBuf();
     }
     if(incomingByte == 'W') waitMode = !waitMode;
