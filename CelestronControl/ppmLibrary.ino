@@ -240,8 +240,11 @@ volatile int buffer_location = 0;
 volatile int time_waited = 0;
 volatile int msg_length = 0;
 volatile bool laser_on = false;
-volatile bool transmitting = false;
+
 volatile unsigned long last_period = 0;
+volatile unsigned long time_since_ten = 0;
+volatile int periods_since_ten = 0;
+
 #include <TimerOne.h>
 volatile unsigned long transmit_period = 400;
 //volatile unsigned long transmit_period = 100;// + clock_offset;
@@ -261,8 +264,6 @@ void transmit_msg(char* msg, int m_length){
     sei();
     return;
   }
-  
-  
   if(m_length*4+6>buffer_size){
     msg_length = buffer_size-4; //-4 to account for EOF char, while still staying divisible by 4.
   }else{
@@ -286,49 +287,28 @@ void transmit_msg(char* msg, int m_length){
   Serial.println((0b1<<N_BITS)+1);
   //transmit_timer.begin(transmit_timer_tick, transmit_period);
   transmitting = true;
-  //Timer1.start();
+  Timer1.start();
   interrupts(); //For some reason the interrupts() flag doesn't work. Used the above boolean instead.
   sei();
 }
 
 void transmit_timer_tick(){
   noInterrupts();
-  bool local_laser = laser_on;
-  cli();
-  //if((micros()-last_period)<100) return;
-  //if(!transmitting) return;
-  //Serial.print("Time: ");
-  Serial.print(micros()-last_period); 
-  //bool eom = buffer_location>msg_length-1;
-  //Serial.print(" buffer location: "); 
-  //Serial.print(buffer_location);
-  //Serial.print(" time waited: ");
-  //Serial.print(time_waited);
-  Serial.println(laser_on);
-  //Serial.println(eom);
-
-  digitalWrite(LASER,laser_on);
-  laser_on = !laser_on;
-//  if(local_laser){
-//    digitalWrite(LASER,LOW);
-//    laser_on = false;
-//  }else{
-//    digitalWrite(LASER,HIGH);
-//    laser_on = true;
-//  }
-  //delayMicroseconds(35);
+  bool eom = buffer_location>msg_length-1;
+//  Serial.print(" buffer location: "); 
+//  Serial.print(buffer_location);
+//  Serial.print(" time waited: ");
+//  Serial.print(time_waited);
+//  Serial.print(" ");
+//  Serial.print(laser_on);
+//  Serial.print(" ");
+//  Serial.print(last_period);
+//  last_period = micros();
   
-  last_period = micros();
-  interrupts();
-  sei();
-  return;
-  
-/*
   if(time_waited == 0){//Just got to this buffer_location, send starting pulse
     digitalWrite(LASER, HIGH);
     laser_on = true;
     time_waited++;
-    
     last_period = micros();
     interrupts(); 
     return;
@@ -345,7 +325,8 @@ void transmit_timer_tick(){
       laser_on=false;
       reset_buffer();
       transmitting = false;
-      transmit_timer.end();
+      Serial.println("Transmission Completed");
+      Timer1.stop();
     }
     
     last_period = micros();
@@ -356,8 +337,7 @@ void transmit_timer_tick(){
   time_waited++;
   last_period = micros();
   interrupts(); 
-
-  */
+  return;
 }
 
 

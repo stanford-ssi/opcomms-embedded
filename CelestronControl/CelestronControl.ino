@@ -168,6 +168,7 @@ long currentAzm = -1;
 long currentAlt = -1;
 
 #include <TimerOne.h>
+volatile bool transmitting = false;
 
 void setup()
 {
@@ -176,7 +177,7 @@ void setup()
 
   Timer1.initialize(100);
   Timer1.attachInterrupt(transmit_timer_tick);
-  Timer1.start();
+  Timer1.stop();
   
 
   
@@ -306,8 +307,7 @@ void loop() // run over and over
       Serial.readBytes(msgBuf, msgLen);
       //blink_Packet(msgBuf, msgLen);
       Serial.println("Transmitting with Hardware Interrupts");
-      //transmit_msg(msgBuf, msgLen);
-      Timer1.stop();
+      transmit_msg(msgBuf, msgLen);
       clearMsgBuf();
     }
     if(incomingByte == 'W') waitMode = !waitMode;
@@ -340,7 +340,7 @@ void loop() // run over and over
       ledColor(LED_OFF);
     }
   }
-  digitalWrite(LASER,beamHold ? HIGH : LOW);
+  if(!transmitting) digitalWrite(LASER,beamHold ? HIGH : LOW); //AAAAAH THIS LINE WAS HIDING AND COST ME A WHOLE DAY OF MY LIFE. WHY CRUEL WORLD? Must be disabled for hardware interrupts. 
   
   if(blinkMode){
     digitalWrite(LASER, blinkState ? HIGH : LOW);
