@@ -171,11 +171,20 @@ bool blinkState = 0;
 long currentAzm = -1;
 long currentAlt = -1;
 
+#include <TimerOne.h>
+volatile bool transmitting = false;
+
 void setup()
 {
   //analogReference(INTERNAL);
   Serial.begin(250000);
 
+  Timer1.initialize(100);
+  Timer1.attachInterrupt(transmit_timer_tick);
+  Timer1.stop();
+  
+
+  
   pinMode(EN_PIN, OUTPUT);
   pinMode(TX, OUTPUT);
   pinMode(RX, INPUT_PULLUP);
@@ -224,6 +233,8 @@ void setup()
 
 void loop() // run over and over
 {
+ 
+
   if(Serial.available() > 0){
     byte incomingByte = Serial.read();
 
@@ -309,9 +320,9 @@ void loop() // run over and over
     if(incomingByte == '>'){
       int msgLen = Serial.available(); //Counts number of bytes to be sent
       Serial.readBytes(msgBuf, msgLen);
-      blink_Packet(msgBuf, msgLen);
-      //Serial.println("now sending via interrupts");
-      //transmit_msg(msgBuf);
+      //blink_Packet(msgBuf, msgLen);
+      Serial.println("Transmitting with Hardware Interrupts");
+      transmit_msg(msgBuf, msgLen);
       clearMsgBuf();
     }
     /*
@@ -351,8 +362,9 @@ void loop() // run over and over
       ledColor(LED_OFF);
     }
   }
-  digitalWrite(LASER,beamHold ? HIGH : LOW);
 
+  if(!transmitting) digitalWrite(LASER,beamHold ? HIGH : LOW); //AAAAAH THIS LINE WAS HIDING AND COST ME A WHOLE DAY OF MY LIFE. WHY CRUEL WORLD? Must be disabled for hardware interrupts. 
+  
   if(blinkMode){
     digitalWrite(LASER, blinkState ? HIGH : LOW);
     blinkState = !blinkState;
