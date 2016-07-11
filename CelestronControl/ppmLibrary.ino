@@ -264,7 +264,7 @@ void transmit_msg(char* msg, int m_length){
     sei();
     return;
   }
-  if(m_length*4+6>buffer_size){
+  if(m_length*4+4>buffer_size){
     msg_length = buffer_size-4; //-4 to account for EOF char, while still staying divisible by 4.
   }else{
     msg_length = m_length*4;
@@ -351,4 +351,99 @@ void reset_buffer(){
   msg_length = 0;
 }
 
+
+//=========================================================================================================================================
+//=========================================================================================================================================
+//         Hardware Interrupt Reciever Code
+static int msg_length = 64;
+static int pro_size = 200; //Size of the buffer to be process in each chunk. Designed for one char each time.
+static int analog_buffer_size = 2048;
+volatile int msg_buffer[msg_length] = {0};
+volatile int analog_buffer[analog_buffer_size] = {0};
+volatile int glob_analog_buffer_index;
+volatile int glob_analog_buffer_processing_index = 0;
+volatile int chars_read_so_far = 0;
+volatile char msg_buffer[max_msg_length];
+volatile bool message_ready = false;
+volatile bool start_msg_decode = false;
+
+
+
+
+/*
+ * Monitors the buffer that is filled with every ADC trigger. Must be placed in the main loop function.
+ */
+void decode_msg_buffer(){
+   //Takes local copies of all global vars.
+   noInterrupts();
+   int starting_index = glob_analog_buffer_processing_index;
+   int an_buffer[pro_size] = copy_buffer(starting_index);
+   int main_buffer_index = glob_analog_buffer_index;
+   interrupts();
+   //Looks to see if a message is ready to be printed. If not, it parses some more.
+   if(message_ready){
+      noInterrupts();
+      Serial.println(msg_buffer);
+      message_ready=false;
+      char empty_buf[max_msg_length] = {0};
+      msg_buffer = empty_buf;
+      interrupts();
+      return
+   }
+   //All the buffer alignment, index position checks, etc.
+   if( (main_buffer_index-starting_index)<pro_size && (main_buffer_index-starting_index+analog_buffer_size <pro_size) ) return; // We're too close to the current sampling index. Try again later. 
+   int curr_index = 0;
+   while(an_buffer[curr_index<sensorThreshold){curr_index++; } //normalizes us so we always start the decoding (the for loop below) at the initial laser pulse
+   if(curr_index>10){ //Error, did not start close to a starting pulse. Probably means no messages to see, might mean mis-aligned timing. This also serves to advance us through periods of darkness.
+    noInterrupts();
+    glob_analog_bufer_processing_index = (starting_index+pro_size)%analog_buffer_size;
+    interrupts();
+    return;
+   }
+
+   //Decoding the buffer now into an actual byte.
+   for(int k=0; k<4; k++){
+      while(an_buffer[curr_index]>=sensorThreshold){ curr_index++;} //Moves past initial pulse
+      if(curr_index>20){//Psyche, initial pulse was the EOF pulse.
+        noInterrupts();
+        message_ready=true;
+        interrupts();
+        return;       
+      }
+      while(an_buffer[curr_index]<sensorThreshold){//Counts number of samples between initial pulse and following pulse.
+        curr_index++;
+        samples_counted++;
+        if(curr_index>=pro_size){//ERROR: Finishing pulse not found.
+          noInterrupts();
+          glob_analog_bufer_processing_index = (starting_index+pro_size)%analog_buffer_size;
+          interrupts();
+          return;
+      }}
+       samples_counted = samplesCountedToNibblet(samples_counted);
+       char_being_read = (char_being_read << 2) | samplesCounted; //Moves existing bits to the left, inserts new bits on right. Magic number 2 comes from the number of bits decoded with each symbol.
+      }//end for
+   noInterrupts();
+   msg_buffer[chars_read_so_far] = char_being_read;
+   chars_read_so_far++;
+   glob_analog_buffer_processing_index = (starting_index+curr_index)%analog_buffer_size;//Possible Bug, may be starting one before the pulse window. Double check.
+   interrupts();
+   return;   
+}
+
+bool aboveThreshold(int i){
+  return i>threshol_val;
+  }
+  
+/*
+ * Copies the next 200 values of the memory buffer to a local copy starting from index i.
+ */
+int[] copy_buffer(int i){
+  noInterrupts();
+  int buf[pro_size] = {0};
+  for( int j=0; j<pro_size; j++){
+    buf[j] = analog_buffer[(j+i)%analog_buffer_size]; 
+  }
+  interrupts();
+  return buf;
+}
 
