@@ -351,7 +351,7 @@ void reset_buffer(){
   msg_length = 0;
 }
 
-void fill_analog_buffer() {
+void receive_interrupt() {
   noInterrupts();
   if(analogRead(SENSOR_PIN) > sensorThreshold){
    listen_for_msg();

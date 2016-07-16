@@ -185,7 +185,7 @@ void setup()
   Timer1.stop();
   
   Timer3.initialize(25);
-  Timer3.attachInterrupt(fill_analog_buffer);
+  Timer3.attachInterrupt(receive_interrupt);
   Timer3.stop();
 
   
