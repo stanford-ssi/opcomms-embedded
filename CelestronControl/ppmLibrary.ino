@@ -351,20 +351,17 @@ void reset_buffer(){
   msg_length = 0;
 }
 
-
-
-//=========================================================================================================================================
-//=========================================================================================================================================
-//         ISR
-
-static const int glob_analog_buffer_size = 512;
-volatile int glob_analog_buffer[glob_analog_buffer_size] = {0};
-volatile int placing_index = 0;
-
-void isr(){
-  glob_analog_buffer[placing_index] = analogRead(SENSOR_PIN);
-  placing_index = (placing_index + 1) % glob_analog_buffer_size;
+void fill_analog_buffer() {
+  noInterrupts();
+  if(analogRead(SENSOR_PIN) > sensorThreshold){
+   listen_for_msg();
+   Serial.println(msgBuf);
+   clearMsgBuf();
+  }
+  interrupts();
 }
+
+
 
 
 //=========================================================================================================================================

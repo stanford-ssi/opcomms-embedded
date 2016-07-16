@@ -172,6 +172,7 @@ long currentAzm = -1;
 long currentAlt = -1;
 
 #include <TimerOne.h>
+#include <TimerThree.h>
 volatile bool transmitting = false;
 
 void setup()
@@ -183,6 +184,9 @@ void setup()
   Timer1.attachInterrupt(transmit_timer_tick);
   Timer1.stop();
   
+  Timer3.initialize(25);
+  Timer3.attachInterrupt(fill_analog_buffer);
+  Timer3.stop();
 
   
   pinMode(EN_PIN, OUTPUT);
@@ -229,6 +233,8 @@ void setup()
 
   long azmTarget = 1000000;
   long altTarget = 1000000;
+
+  Timer3.start();
 }
 
 void loop() // run over and over
