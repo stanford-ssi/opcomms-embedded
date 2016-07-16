@@ -61,15 +61,15 @@ int listen_for_msg(){
 
 
   elapsedMillis waiting;
-  digitalWrite(LED, HIGH);
-  //while(checkSensor(SENSOR_PIN)==0){} //Note: this hangs the board
-  while(checkSensor(SENSOR_PIN)==0 && !Serial.available()){} //Note: this hangs the board until a message arrives or other input received, whatever comes first
-  digitalWrite(LED, LOW);
-
-  if(Serial.available()){
-    waitMode = false;
-    return -1; //Time out if input receiced
-  }
+//  digitalWrite(LED, HIGH);
+//  //while(checkSensor(SENSOR_PIN)==0){} //Note: this hangs the board
+//  while(checkSensor(SENSOR_PIN)==0 && !Serial.available()){} //Note: this hangs the board until a message arrives or other input received, whatever comes first
+//  digitalWrite(LED, LOW);
+//
+//  if(Serial.available()){
+//    waitMode = false;
+//    return -1; //Time out if input receiced
+//  }
   
   while(charsRead < MSG_BUF_LEN && stopChar == 0){
 
@@ -351,6 +351,16 @@ void reset_buffer(){
   msg_length = 0;
 }
 
+
+
+/* ============================================================================
+ * Hardware Interrupt Reciever Code implemented with listen_for_msg();
+ * ============================================================================
+ */
+
+// Her Majesty, The Interrupt Service Routine
+// Runs at (currently) 25us intervals and processes message given a signal during that interval
+// Of course there are some shenanigans with the timing that would make the court jester laugh but functional. 
 void receive_interrupt() {
   noInterrupts();
   if(analogRead(SENSOR_PIN) > sensorThreshold){
@@ -362,93 +372,158 @@ void receive_interrupt() {
 }
 
 
+/* ============================================================================
+ * Hardware Interrupt Reciever Code using Buffers
+ * ! Now Defunct :( !
+ * ============================================================================
+ */
+
+// Constants
+const int msg_length_max = 64;                                // Maximum Size of A Given Message
+const int analog_buffer_size = 2048;                          // Maximum Size of the Global Analog Buffer
+const int pro_size = 256;                                     // Size of the buffer to be processed in each chunk. Designed for one char each time
 
 
-//=========================================================================================================================================
-//=========================================================================================================================================
-//         Hardware Interrupt Reciever Code
-const int msg_length_max = 64;
-const int pro_size = 256; //Size of the buffer to be process in each chunk. Designed for one char each time.
-const int analog_buffer_size = 2048;
-volatile int analog_buffer[analog_buffer_size] = {0};
-volatile int glob_analog_buffer_index;
-volatile int glob_analog_buffer_processing_index = 0;
+// Volatiles
+volatile int analog_buffer[analog_buffer_size] = {0};         // His Majesty, The Global Analog Buffer
+volatile int glob_analog_buffer_index;                        // Refers to the "placing index" for the ISR
+volatile int glob_analog_buffer_processing_index = 0;         // Refers to the index of the Global Analog Buffer where chunk processing begins
 volatile int chars_read_so_far = 0;
-volatile char msg_buffer_r[msg_length_max]={0};   //WARNING: TODO: remove the '_r' from the variable names and look for compatability with its other instances. Warning to the warning: a msg_buffer is used in transmit and they must be distinct. msg_buff_trans, msg_buff_recieve?
-volatile bool message_ready_r = false;
+volatile char received_message_buffer[msg_length_max] = {0};
+volatile bool received_message_ready = false;                 // Flag indicating if a received message is available
 //volatile bool start_msg_decode = false;
 
+/*
+ * Function: bool aboveThreshold(int i)
+ * --------------------------------------------------
+ * Predicate function returning if a value is above the threshold for activation
+ *
+ */
+bool aboveThreshold(int i) {
+  return (i > sensorThreshold);
+}
 
-
-bool aboveThreshold(int i){
-  return (i>sensorThreshold);
-  }
-  
 
 /*
- * Monitors the buffer that is filled with every ADC trigger. Must be placed in the main loop function.
+ * bool chunkAvailable(int main_buffer_index, int starting_index)
+ * --------------------------------------------------
+ * Predicate function returning if our chunk is large enough for processing
+ *
  */
-void decode_msg_buffer(){
-   //Takes local copies of all global vars.
-   noInterrupts();
-   int starting_index = glob_analog_buffer_processing_index;
-   int an_buffer[pro_size];
-   for( int j=0; j<pro_size; j++){
-      an_buffer[j] = analog_buffer[(j+starting_index)%analog_buffer_size]; 
-   }
-   int main_buffer_index = glob_analog_buffer_index;
-   interrupts();
-   //Looks to see if a message is ready to be printed. If not, it parses some more.
-   if(message_ready_r){
-      noInterrupts();
-      char loc_msg_buff[msg_length_max];
-      for( int j=0; j<msg_length_max; j++){
-        loc_msg_buff[j] = msg_buffer_r[j]; 
-        msg_buffer_r[j] = 0;
-      }
-      message_ready_r=false;
-      interrupts();
-      Serial.println(loc_msg_buff);
-      return;
-   }
-   //All the buffer alignment, index position checks, etc.
-   if( (main_buffer_index-starting_index)<pro_size && (main_buffer_index-starting_index+analog_buffer_size <pro_size) ) return; // We're too close to the current sampling index. Try again later. 
-   int curr_index = 0;
-   while(an_buffer[curr_index]<sensorThreshold){curr_index++; } //normalizes us so we always start the decoding (the for loop below) at the initial laser pulse
-   if(curr_index>10){ //Error, did not start close to a starting pulse. Probably means no messages to see, might mean mis-aligned timing. This also serves to advance us through periods of darkness.
+bool chunkAvailable(int main_buffer_index, int starting_index) {
+  if ((main_buffer_index - starting_index) < pro_size && (main_buffer_index - starting_index + analog_buffer_size < pro_size)) return true;
+  return false;
+}
+
+
+
+/*
+ * void print_message_buffer()
+ * --------------------------------------------------
+ * Prints a received message!
+ *
+ */
+void print_message_buffer() {
+  noInterrupts();
+  char loc_msg_buff[msg_length_max];                        // Initialize Local Message Buffer Array
+  for (int j = 0; j < msg_length_max; j++) {                // Copies characters from volatile global
+    loc_msg_buff[j] = received_message_buffer[j];
+    received_message_buffer[j] = 0;                         // Clears buffer as its read
+  }
+  received_message_ready = false;                           // Toggle flag
+  interrupts();
+  Serial.println(loc_msg_buff);                             // Send message to serial
+}
+
+void print_buffer(){
+  noInterrupts();
+    for (int i = 0; i < glob_analog_buffer_index; i++){
+      Serial.print(analog_buffer[i]);
+      Serial.print(", ");
+      Serial.println(" ");
+    }
+  interrupts();
+}
+
+/*
+ * Function: void decode_msg_buffer()
+ * --------------------------------------------------
+ * Monitors the buffer that is filled with every ADC trigger. Must be placed in the main loop function.
+ *
+ */
+void decode_msg_buffer() {
+  Serial.println("Hello! I'm here at the beginning!");
+  // Takes local copies of all global vars.
+  noInterrupts();
+  int starting_index = glob_analog_buffer_processing_index;                      // Starting_index refers to global position of chunk processing
+  int an_buffer[pro_size];                                                       // Refers to local copy of analog buffer, hereby referred to as "the chunk"
+  for (int j = 0; j < pro_size; j++) {                                           // Populate the chunk from the global buffer
+    an_buffer[j] = analog_buffer[(j + starting_index) % analog_buffer_size];     // Wrap Around
+  }
+  int main_buffer_index = glob_analog_buffer_index;                              // Refers to the "placing index"
+  interrupts();
+
+
+  // Looks to see if a message is ready to be printed. If not, it parses some more.
+  if (received_message_ready) {
+    print_message_buffer();
+    return;
+  }
+
+
+
+  //All the buffer alignment, index position checks, etc.
+  if (chunkAvailable(main_buffer_index, starting_index)) return;         // Chunk to be processed too small - We're too close to the current sampling index. Try again later.
+  int curr_index = 0;
+  while (!aboveThreshold(an_buffer[curr_index])) {
+    curr_index++;                                                       // Normalizes us so we always start the decoding (the for loop below) at the initial laser pulse
+  }
+  if (curr_index > 10) {                                               // Did not start close to a starting pulse; no messages to see or mean mis-aligned timing. Advances through periods of darkness.
     noInterrupts();
-    glob_analog_buffer_processing_index = (starting_index+pro_size)%analog_buffer_size;
+    glob_analog_buffer_processing_index = (starting_index + pro_size) % analog_buffer_size; // Advances the index where we would begin chunk processing.
     interrupts();
     return;
-   }
-    
-   //Decoding the buffer now into an actual byte.
-   char char_being_read;
-   for(int k=0; k<4; k++){
-      while(an_buffer[curr_index]>=sensorThreshold){ curr_index++;} //Moves past initial pulse
-      if(curr_index>20){//Psyche, initial pulse was the EOF pulse. Message now ready to be sent.
+  }
+
+
+  //Decoding the buffer now into an actual byte.
+  char char_being_read;
+
+  for (int k = 0; k < 4; k++) {
+    Serial.println("Hello! I'm here!");
+    while (an_buffer[curr_index] >= sensorThreshold) {
+      curr_index++;                                                   // Moves past initial pulse
+    }
+    if (curr_index > 20) {                                            //Psyche, initial pulse was the EOF pulse. Message now ready to be sent.
+      noInterrupts();
+      received_message_ready = true;
+      interrupts();
+      return;
+    }
+
+    int samples_counted = 0;
+
+    while (an_buffer[curr_index] < sensorThreshold) {       //Counts number of samples between initial pulse and following pulse.
+      curr_index++;
+      samples_counted++;
+      if (curr_index >= pro_size) {               //ERROR: Finishing pulse not found.
         noInterrupts();
-        message_ready_r=true;
+        glob_analog_buffer_processing_index = (starting_index + pro_size) % analog_buffer_size;
         interrupts();
-        return;       
+        return;
       }
-      int samples_counted = 0;
-      while(an_buffer[curr_index]<sensorThreshold){//Counts number of samples between initial pulse and following pulse.
-        curr_index++;
-        samples_counted++;
-        if(curr_index>=pro_size){//ERROR: Finishing pulse not found.
-          noInterrupts();
-          glob_analog_buffer_processing_index = (starting_index+pro_size)%analog_buffer_size;
-          interrupts();
-          return;
-      }}
-       samples_counted = samplesCountedToNibblet(samples_counted);
-       char_being_read = (char_being_read << 2) | samples_counted; //Moves existing bits to the left, inserts new bits on right. Magic number 2 comes from the number of bits decoded with each symbol.
-      }//end for
-   noInterrupts();
-   msg_buffer_r[chars_read_so_far] = char_being_read;
-   chars_read_so_far++;
-   glob_analog_buffer_processing_index = (starting_index+curr_index)%analog_buffer_size;//Possible Bug, may be starting one before the pulse window. Double check.
-   interrupts();
-   return;   
+    }
+
+    samples_counted = samplesCountedToNibblet(samples_counted);
+
+    char_being_read = (char_being_read << 2) | samples_counted; //Moves existing bits to the left, inserts new bits on right. Magic number 2 comes from the number of bits decoded with each symbol.
+  }//end for
+
+
+  noInterrupts();
+  received_message_buffer[chars_read_so_far] = char_being_read;
+  chars_read_so_far++;
+  glob_analog_buffer_processing_index = (starting_index + curr_index) % analog_buffer_size; //Possible Bug, may be starting one before the pulse window. Double check.
+  interrupts();
+  return;
 }
