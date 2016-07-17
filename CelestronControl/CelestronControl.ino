@@ -248,6 +248,7 @@ void loop() // run over and over
       highPrecision = !highPrecision;
       analogReadResolution(highPrecision ? HIGH_PRECISION : STANDARD_PRECISION);
     }
+    noInterrupts();
     if(incomingByte == 'Q') query();
     if(incomingByte == 'Z') query(true);
     if(incomingByte - '0' <= 9 && incomingByte - '0' >= 1) globalSpeed = incomingByte - '0';
@@ -267,6 +268,7 @@ void loop() // run over and over
       imuAzmOffset = double(Serial.parseFloat());
       imuAltOffset = double(Serial.parseFloat());
     }
+    interrupts();
     if(incomingByte == 'A'){
       alignAFS();
     }
