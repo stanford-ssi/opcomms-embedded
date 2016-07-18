@@ -152,6 +152,7 @@ bool waitMode = false;
 bool beamHold = false;
 bool blinkMode = false;
 bool highPrecision = false;
+bool receiveMode = false; 
 
 bool saveCoefficientsEnabled = false; //Dangerous; safety must be disabled prior to attempting
 bool loadCoefficientsEnabled = false; //Dangerous; safety must be disabled prior to attempting
@@ -184,7 +185,7 @@ void setup()
   Timer1.attachInterrupt(transmit_timer_tick);
   Timer1.stop();
   
-  Timer3.initialize(25);
+  Timer3.initialize(11);
   Timer3.attachInterrupt(receive_interrupt);
   Timer3.stop();
 
@@ -234,13 +235,12 @@ void setup()
   long azmTarget = 1000000;
   long altTarget = 1000000;
 
-  Timer3.start();
+  //Timer3.start();
 }
 
 void loop() // run over and over
 {
  
-
   if(Serial.available() > 0){
     byte incomingByte = Serial.read();
 
@@ -352,7 +352,16 @@ void loop() // run over and over
     }
 
     if(incomingByte == '<'){
-      Serial.println("Waiting for msg:");
+      if(receiveMode){
+        receiveMode = false;
+        Timer3.stop();
+        Serial.println("receiveMode OFF"); 
+      } else {
+        receiveMode = true;
+        Timer3.start();
+        Serial.println("receiveMode ON");
+      }
+     /* Serial.println("Waiting for msg:");
       while(Serial.available()) Serial.read(); //For no obvious reason, not clearing the Serial buffer prior to listening causes weird timing bugs
       int charsRead = listen_for_msg();
 
@@ -362,7 +371,7 @@ void loop() // run over and over
         clearMsgBuf();
       }else{
         Serial.println(0);
-      }
+      } */
     }
 
     if(incomingByte == '*'){

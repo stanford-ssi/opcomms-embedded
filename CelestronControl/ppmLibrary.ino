@@ -60,6 +60,8 @@ int listen_for_msg(){
   int samplesCounted;
 
 
+noInterrupts();
+
   elapsedMillis waiting;
 //  digitalWrite(LED, HIGH);
 //  //while(checkSensor(SENSOR_PIN)==0){} //Note: this hangs the board
@@ -74,14 +76,15 @@ int listen_for_msg(){
   while(charsRead < MSG_BUF_LEN && stopChar == 0){
 
     //The 4 here needs to be changed to accept a different PPM value and I couldn't think of a smart way of doing it in advance
-    for(int i = 0; i < 4; i++){
-      delayMicroseconds(highTime); //Let start pulse pass
-      samplesCounted = 0;
+    for(int i = 0; i < 4; i++){     //done 4 times to assemble byte
+      delayMicroseconds(highTime); //Let start pulse pass (should be 100 microsecs)
+      samplesCounted = 0;           //resets every iteration (4 times/byte)
 
+      //  EOP check
       while(checkSensor(SENSOR_PIN)==1){
         samplesCounted++;
       }
-      if(samplesCounted > 20){
+      if(samplesCounted > 20){  //  may cost some time
         stopChar = 1; //detect end of packet
         //Serial.println("EOP");
       }
@@ -90,7 +93,7 @@ int listen_for_msg(){
         samplesCounted = 0;
         while(samplesCounted < 100 && checkSensor(SENSOR_PIN)==0){
           samplesCounted++;
-          delayMicroseconds(sampleTime);
+          delayMicroseconds(sampleTime);    //~drift may be caused by sampleTime 
         }
 
         if(samplesCounted >= 100) stopChar = 1; //Detect failure and terminate packet
@@ -103,6 +106,7 @@ int listen_for_msg(){
         charBeingRead = (charBeingRead << N_BITS) | samplesCounted; //Moves existing bits to the left, inserts new bits on right
       }
     }
+    
     if(!stopChar){
       msgBuf[charsRead] = charBeingRead;
       //Serial.println(charBeingRead);
@@ -110,7 +114,9 @@ int listen_for_msg(){
     }
   }
 
+  interrupts();
   return charsRead;
+
 }
 
 /*Function: samplesCountedToNibblet
