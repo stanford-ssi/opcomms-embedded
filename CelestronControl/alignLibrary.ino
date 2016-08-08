@@ -29,7 +29,7 @@ void alignAFS() {
   beacon.begin(laserBeacon, 1000000/(2*BEACON_FREQUENCY));
 
   // Start simplex search
-  simplexSearch(getIMUPos(ALT), getIMUPos(AZM));
+  simplexSearch(celestronGetPos(ALT, false), celestronGetPos(AZM, false));
 
   beacon.end();
 }
@@ -64,7 +64,7 @@ void simplexSearch(double alt0, double az0) {
 double cost_fun(int n, const double *x, void *arg) {
   double alt = x[0];
   double az = x[1];
-  imuGoToPos(alt, az, 0);
+  celestronGoToPos(alt, az);
   Serial.println("Beacon power is");
   double powah = getBeaconPower();
   Serial.println(powah);
@@ -74,7 +74,7 @@ double cost_fun(int n, const double *x, void *arg) {
 
 double getBeaconPower() {
 
-  int n = 32; // Number of samples
+  int n = 20; // Number of samples
 
   double totalPower = 0; // By Parseval's theorem, we don't need to calculate the full transform to get total power
   double realDFT = 0.0;
