@@ -365,8 +365,7 @@ void reset_buffer(){
  */
 
 // Her Majesty, The Interrupt Service Routine
-// Runs at (currently) 25us intervals and processes message given a signal during that interval
-// Of course there are some shenanigans with the timing that would make the court jester laugh but functional. 
+// Runs at (currently) 11us intervals, interrupts begin after entering receive mode. 
 void receive_interrupt() {
   noInterrupts();
   if(analogRead(SENSOR_PIN) > sensorThreshold){
