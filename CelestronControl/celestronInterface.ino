@@ -104,7 +104,11 @@ void celestronStopCmd(bool shouldWait){ //Stop motion in both axes and wait 600 
   if(shouldWait)delay(600);
 }
 
-void celestronGoToPos(long azmPos, long altPos){
+void celestronGoToPos(long azmPos, long altPos) {
+  celestronGoToPos(azmPos, altPos, 0);
+}
+
+void celestronGoToPos(long azmPos, long altPos, long absTol){
   long currAzmPos = celestronGetPos(AZM,false);
   long currAltPos = celestronGetPos(ALT,false);
   long errorAzm = calcSmallestError(currAzmPos, azmPos);
@@ -130,7 +134,10 @@ void celestronGoToPos(long azmPos, long altPos){
     Serial.print('\t');
     Serial.println(errorAlt);
 
-    if(errorAzm == 0 || abs(errorAzm-lastErrorAzm) < (0.25 * float(abs(lastErrorAzm)))){
+    if (abs(errorAzm) < absTol) {
+      celestronDriveMotor(RIGHT, 0);
+      goodAlign++;
+    } else if(errorAzm == 0 || abs(errorAzm-lastErrorAzm) < (0.25 * float(abs(lastErrorAzm)))){
       if(errorAzm < -50000){
         celestronDriveMotor(LEFT, 9);
       }else if(errorAzm > 50000){
@@ -153,7 +160,10 @@ void celestronGoToPos(long azmPos, long altPos){
       celestronDriveMotor(RIGHT, 0);
     }
 
-    if(errorAlt == 0 || abs(errorAlt-lastErrorAlt) < (0.25 * float(abs(lastErrorAlt)))){
+    if (abs(errorAlt) < absTol) {
+      celestronDriveMotor(DOWN, 0);
+      goodAlign++;
+    } else if(errorAlt == 0 || abs(errorAlt-lastErrorAlt) < (0.25 * float(abs(lastErrorAlt)))){
       if(errorAlt < -50000){
         celestronDriveMotor(UP, 9);
       }else if(errorAlt > 50000){
