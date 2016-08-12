@@ -27,30 +27,39 @@ double EARTH_RADIUS = 6371009;
 const int BATCH_SIZE = 20;
 double POWER_THRESHOLD = 0.03;
 double AWESOME_THRESHOLD = 0.25;
-double POINTING_ACCURACY = 0.01;
+double POINTING_ACCURACY = 0.02;
+double EARTH_FLATTENING = 1/298.257223563;
 
 bool beaconState = true;
 
+/*
+ * Main function to align each receiver. Both Rosencrantz and Guildenstern should run it at the same time.
+ */
 void alignAFS() {
-  // Calibrate sampling loop
+  // Calibrate sampling loop so that we are sampling at the right frequency.
   calibrateSampling();
 
+  // Perform rough GPS align.
   Serial.println("Loop calibrated. Press q to quit anytime. Where do you want to point? [e for EPC, l for lake, c for custom, q for quit, s for skip]");
   while (!Serial.available());
   char c = Serial.read();
-  double tgtLat, tgtLon, srcLat, srcLon;
+  double tgtLat, tgtLon, tgtAlt, srcLat, srcLon, srcAlt;
   if (c == 'q') return;
   if (c == 'l') {
     tgtLat = 37.423341;
     tgtLon = -122.175168;
+    tgtAlt = 39.5;
     srcLat = 37.424133;
     srcLon = -122.177778;
+    srcAlt = 44;
   }
   if (c == 'e') {
     tgtLat = 37.424133;
     tgtLon = -122.177778;
+    tgtAlt = 44;
     srcLat = 37.423341;
     srcLon = -122.175168;
+    srcAlt = 39.5;
   }
   if (c == 'c') {
     Serial.println("I'm sorry, Dave. I'm afraid I can't do that. [Read: I'm too lazy to implement this.]");
@@ -68,20 +77,21 @@ void alignAFS() {
     while (!Serial.available());
     float altOffset = Serial.parseFloat();
     Serial.println(" Alright.");
+    Serial.println(altOffset);
     Serial.print("Azimuth offset? ");
     while (!Serial.available());
     float azmOffset = Serial.parseFloat();
     Serial.println(" Alright.");
+    Serial.println(azmOffset);
   
     // Align it in the general direction via known GPS coordinates.
-    coarseGPSalign(srcLat, srcLon, tgtLat, tgtLon, altOffset, azmOffset);
+    coarseGPSalign(srcLat, srcLon, srcAlt, tgtLat, tgtLon, tgtAlt, altOffset, azmOffset);
   }
 
   Serial.println("GPS coarse align complete. Check with the other side. Will now turn on beacon. [y for yes, q for quit]");
   while (!Serial.available());
   c = Serial.read();
   if (c == 'q') return;
-
   
   IntervalTimer beacon;
   beacon.begin(laserBeacon, 1000000.0 / (2 * BEACON_FREQUENCY));
@@ -104,6 +114,8 @@ void generateRandomPoint(double* x, double* y) {
     if (r1*r1+r2*r2 <= 1) {
       *x = r1;
       *y = r2;
+      terminated = true;
+      break;
     }
   }
   if (!terminated) {
@@ -116,30 +128,40 @@ void doCircles(long refAltitude, long refAzimuth, double refRadius) {
   long initialRadius = circleRadius;
   int HYPER = 10;
   double centerPower = hyperBeacon(HYPER);
-  double oldPower = 0.0;
-  double lastDiff = 0.0;
+  Serial.println("Initial power:");
+  Serial.println(centerPower);
 
   double goodAlts[BATCH_SIZE] = {0};
   double goodAzms[BATCH_SIZE] = {0};
   double goodPwrs[BATCH_SIZE] = {0};
   
-  while (centerPower <= AWESOME_THRESHOLD && circleRadius*2*PI/POSMAX <= POINTING_ACCURACY ) {
-
+  while ((centerPower <= AWESOME_THRESHOLD) && (circleRadius*360.0/POSMAX >= POINTING_ACCURACY)) {
+    Serial.print("Looking at ");
+    Serial.print(BATCH_SIZE);
+    Serial.print(" points within a radius of ");
+    Serial.print(circleRadius*360.0/((double) POSMAX),2);
+    Serial.println(" deg.");
     int above_threshold = 0;
     double x, y, powah;
     for (int i=0; i<BATCH_SIZE; i++) {
+      Serial.print("Moving to new point..");
       generateRandomPoint(&x, &y);
-      celestronGoToPos(refAzimuth+x*circleRadius, refAltitude+y*circleRadius,1000);
+      Serial.print(".");
+      celestronGoToPos(refAzimuth+x*circleRadius, refAltitude+y*circleRadius,circleRadius*0.03, 0);
       powah = hyperBeacon(HYPER);
       if (powah > POWER_THRESHOLD) {
-        goodAzms[above_threshold] = refAzimuth+x*circleRadius;
-        goodAlts[above_threshold] = refAltitude+y*circleRadius;
+        goodAzms[above_threshold] = celestronGetPos(AZM, false);
+        goodAlts[above_threshold] = celestronGetPos(ALT, false);
         goodPwrs[above_threshold] = powah;
         above_threshold++;
       }
+      Serial.println(" Done.");
     }
 
     if (above_threshold >= 1) {
+      Serial.print("Found ");
+      Serial.print(above_threshold);
+      Serial.println(" points above threshold.");
       // find the centroid
       double totalMass = 0.0;
       double tempAlt = 0.0;
@@ -153,18 +175,20 @@ void doCircles(long refAltitude, long refAzimuth, double refRadius) {
         totalMass += mass;
       }
 
+      Serial.println("Moving to new reference center and shrinking radius...");
+
       refAltitude = tempAlt/totalMass;
       refAzimuth = tempAzm/totalMass;
       circleRadius = circleRadius/1.5;
     } else {
+      Serial.println("No good points. Increasing circle radius...");
       circleRadius += 2*initialRadius;
     }
 
-    celestronGoToPos(refAzimuth, refAltitude, 1000);
-    lastDiff = abs(centerPower-oldPower);
-    oldPower = centerPower;
+    celestronGoToPos(refAzimuth, refAltitude, 1000, 1);
     centerPower = hyperBeacon(HYPER);
   }
+  Serial.println("Done!");
 }
 
 double hyperBeacon(int n) {
@@ -207,28 +231,33 @@ void calibrateSampling() {
 void alignBeacon() {
   IntervalTimer beacon;
   beacon.begin(laserBeacon, 1000000 / (2 * BEACON_FREQUENCY));
-  delay(1000 * 60 * 20);
+  delay(1000 * 60 * 60);
   beacon.end();
 }
 
 /*
- * TODO: Implement actual ECEF with altitude.
- * 
- * See "Fundamentals of Astrodynamics and Applications" by Vallado (Rory has a copy).
+ * GPS coordinates to Earth-centered, Earth-fixed coordinates.
+ * References:
+ *  - https://www.mathworks.com/help/aeroblks/llatoecefposition.html
+ *  - "Fundamentals of Astrodynamics and Applications" by Vallado (Rory has a copy).
  */
-void latlon2ecef(double lat, double lon, double* x, double* y, double* z) {
-  *x = EARTH_RADIUS*cos(lat*PI/180.)*cos(lon*PI/180.);
-  *y = EARTH_RADIUS*cos(lat*PI/180.)*sin(lon*PI/180.);
-  *z = EARTH_RADIUS*sin(lat*PI/180.);
+void latlon2ecef(double lat, double lon, double h, double* x, double* y, double* z) {
+  lat = lat*PI/180.;
+  lon = lon*PI/180.;
+  double lambda_s = atan(pow(1-EARTH_FLATTENING,2)*tan(lat));
+  double r_s = sqrt((EARTH_RADIUS*EARTH_RADIUS)/(1+(1./pow(1-EARTH_FLATTENING,2) - 1)*sin(lambda_s)*sin(lambda_s) ));
+  *x = r_s*cos(lambda_s)*cos(lon) + h*cos(lat)*cos(lon);
+  *y = r_s*cos(lambda_s)*sin(lon) + h*cos(lat)*sin(lon);
+  *z = r_s*sin(lambda_s) + h*sin(lat);
 }
 
 /* Just point it in the general direction as known by GPS coordinates of the receiver and itself. */
-void coarseGPSalign(double srcLat, double srcLon, double tgtLat, double tgtLon, long altOffset, long azmOffset) {
+void coarseGPSalign(double srcLat, double srcLon, double srcAlt, double tgtLat, double tgtLon, double tgtAlt, long altOffset, long azmOffset) {
   double viewAlt, viewAzm;
 
   double x1, x2, y1, y2, z1, z2;
-  latlon2ecef(srcLat, srcLon, &x1, &y1, &z1);
-  latlon2ecef(tgtLat, tgtLon, &x2, &y2, &z2);
+  latlon2ecef(srcLat, srcLon, srcAlt, &x1, &y1, &z1);
+  latlon2ecef(tgtLat, tgtLon, tgtAlt, &x2, &y2, &z2);
 
   double dx, dy, dz;
   dx = x2-x1;
@@ -239,9 +268,17 @@ void coarseGPSalign(double srcLat, double srcLon, double tgtLat, double tgtLon, 
   viewAlt = asin((x1*dx + y1*dy + z1*dz)/sqrt((x1*x1+y1*y1+z1*z1)*(dx*dx+dy*dy+dz*dz)))*180/PI;
   viewAzm = atan2((-y1*dx + x1*dy) / sqrt((x1*x1+y2*y2)*(dx*dx+dy*dy+dz*dz)), (-z1*x1*dx - z1*y1*dy + (x1*x1+y1*y1)*dz) / sqrt((x1*x1+y1*y1)*(x1*x1+y1*y1+z1*z1)*(dx*dx+dy*dy+dz*dz)))*180/PI;
 
+  if (viewAzm < 0) {
+    viewAzm = 360-viewAzm;
+  }
+
   long currentAlt = celestronGetPos(ALT, false);
   long currentAzm = celestronGetPos(AZM, false);
-  celestronGoToPos(currentAzm + (viewAzm - azmOffset)*POSMAX / 360., currentAlt + (viewAlt - altOffset)*POSMAX / 360.);
+  long pointAzm = currentAzm + (viewAzm - azmOffset)*POSMAX / 360.;
+  long pointAlt = currentAlt + (viewAlt - altOffset)*POSMAX / 360.;
+  pointAzm = pointAzm % POSMAX;
+  pointAlt = pointAlt % POSMAX;
+  celestronGoToPos(pointAzm, pointAlt, 0, 1);
 }
 
 void simplexSearch(double alt0, double az0) {
@@ -262,7 +299,7 @@ void simplexSearch(double alt0, double az0) {
 double cost_fun(int n, const double *x, void *arg) {
   double alt = x[0];
   double az = x[1];
-  celestronGoToPos(az, alt, true);
+  celestronGoToPos(az, alt, true, 1);
   Serial.println("Beacon power is");
   double powah = 0;
   for (int i = 0; i < 10; i++) {
