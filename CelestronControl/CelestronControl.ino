@@ -1,9 +1,3 @@
-/* Commit Information
- * ------------------
- * Date: 08/09/16
- * Latest Feature: Alignment
- */
-
 //Packages by default with Arduino
 #include <Wire.h>
 #include <EEPROM.h>
@@ -12,8 +6,6 @@
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BNO055.h>
 #include <utility/imumaths.h>
-#include <TimerOne.h>
-#include <TimerThree.h>
 #include "nelder_mead.h"
 
 /*****************************************************************
@@ -51,8 +43,8 @@
  *
  *  P - Allows for in-test redefinition of PPM parameters (use is discouraged)
  *  ><message> - Transmits message over PPM
- *  < - Toggles Receive Mode for the transceiver. 
- *  W - Persistently waits to receive message over PPM. HANGS PROGRAM UNITL 10 SECONDS ELAPSE WITHOUT A MESSAGE (Timeout currently untested) (Defunct)
+ *  < - Waits to receive message over PPM. HANGS PROGRAM UNTIL MESSAGE IS RECEIVED OR 10 SECONDS ELAPSE (whichever comes first. Timeout currently untested)
+ *  W - Persistently waits to receive message over PPM. HANGS PROGRAM UNITL 10 SECONDS ELAPSE WITHOUT A MESSAGE (Timeout currently untested)
  *
  *  + - Toggle analogRead precision
  *
@@ -180,6 +172,8 @@ bool blinkState = 0;
 long currentAzm = -1;
 long currentAlt = -1;
 
+#include <TimerOne.h>
+#include <TimerThree.h>
 volatile bool transmitting = false;
 
 void setup()
@@ -367,6 +361,17 @@ void loop() // run over and over
         Timer3.start();
         Serial.println("receiveMode ON");
       }
+     /* Serial.println("Waiting for msg:");
+      while(Serial.available()) Serial.read(); //For no obvious reason, not clearing the Serial buffer prior to listening causes weird timing bugs
+      int charsRead = listen_for_msg();
+
+      if(charsRead != -1){
+        Serial.println(charsRead);
+        Serial.print(msgBuf);
+        clearMsgBuf();
+      }else{
+        Serial.println(0);
+      } */
     }
 
     if(incomingByte == '*'){
@@ -395,6 +400,7 @@ void loop() // run over and over
         Serial.println(0);
     }
   }
+
 
   if(vomitData){
       query();

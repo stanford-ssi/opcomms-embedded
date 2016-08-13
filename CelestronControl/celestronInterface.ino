@@ -104,11 +104,7 @@ void celestronStopCmd(bool shouldWait){ //Stop motion in both axes and wait 600 
   if(shouldWait)delay(600);
 }
 
-void celestronGoToPos(long azmPos, long altPos) {
-  celestronGoToPos(azmPos, altPos, 0, 2);
-}
-
-void celestronGoToPos(long azmPos, long altPos, long absTol, int verb){
+void celestronGoToPos(long azmPos, long altPos){
   long currAzmPos = celestronGetPos(AZM,false);
   long currAltPos = celestronGetPos(ALT,false);
   long errorAzm = calcSmallestError(currAzmPos, azmPos);
@@ -118,7 +114,6 @@ void celestronGoToPos(long azmPos, long altPos, long absTol, int verb){
   digitalWrite(LED, LOW);
   
   while(goodAlign < 2){
-    Serial.print(".");
     goodAlign = 0;
     currAzmPos = celestronGetPos(AZM,false);
     currAltPos = celestronGetPos(ALT,false);
@@ -126,21 +121,16 @@ void celestronGoToPos(long azmPos, long altPos, long absTol, int verb){
     long lastErrorAlt = errorAlt;
     errorAzm = calcSmallestError(currAzmPos, azmPos);
     errorAlt = calcSmallestError(currAltPos, altPos);
-    if (verb == 2) {
-      Serial.print('@');
-      Serial.print(currAzmPos);
-      Serial.print(',');
-      Serial.println(currAltPos);
-      Serial.print("Delta Azm/Alt: ");
-      Serial.print(errorAzm);
-      Serial.print('\t');
-      Serial.println(errorAlt);
-    }
+    Serial.print('@');
+    Serial.print(currAzmPos);
+    Serial.print(',');
+    Serial.println(currAltPos);
+    Serial.print("Delta Azm/Alt: ");
+    Serial.print(errorAzm);
+    Serial.print('\t');
+    Serial.println(errorAlt);
 
-    if (abs(errorAzm) < absTol) {
-      celestronDriveMotor(RIGHT, 0);
-      goodAlign++;
-    } else if(errorAzm == 0 || abs(errorAzm-lastErrorAzm) < (0.25 * float(abs(lastErrorAzm)))){
+    if(errorAzm == 0 || abs(errorAzm-lastErrorAzm) < (0.25 * float(abs(lastErrorAzm)))){
       if(errorAzm < -50000){
         celestronDriveMotor(LEFT, 9);
       }else if(errorAzm > 50000){
@@ -154,21 +144,16 @@ void celestronGoToPos(long azmPos, long altPos, long absTol, int verb){
         goodAlign++;
       }
     }else{
-      if (verb == 2) {
-        Serial.print("AZM Transient ");
-        Serial.print(errorAzm);
-        Serial.print(' ');
-        Serial.print(lastErrorAzm);
-        Serial.print(' ');
-        Serial.println(0.2 * float(lastErrorAzm));
-      }
+      Serial.print("AZM Transient ");
+      Serial.print(errorAzm);
+      Serial.print(' ');
+      Serial.print(lastErrorAzm);
+      Serial.print(' ');
+      Serial.println(0.2 * float(lastErrorAzm));
       celestronDriveMotor(RIGHT, 0);
     }
 
-    if (abs(errorAlt) < absTol) {
-      celestronDriveMotor(DOWN, 0);
-      goodAlign++;
-    } else if(errorAlt == 0 || abs(errorAlt-lastErrorAlt) < (0.25 * float(abs(lastErrorAlt)))){
+    if(errorAlt == 0 || abs(errorAlt-lastErrorAlt) < (0.25 * float(abs(lastErrorAlt)))){
       if(errorAlt < -50000){
         celestronDriveMotor(UP, 9);
       }else if(errorAlt > 50000){
@@ -182,24 +167,20 @@ void celestronGoToPos(long azmPos, long altPos, long absTol, int verb){
         goodAlign++;
       }
     }else{
-      if (verb == 2) {
-        Serial.print("ALT Transient ");
-        Serial.print(errorAlt);
-        Serial.print(' ');
-        Serial.print(lastErrorAlt);
-        Serial.print(' ');
-        Serial.println(0.2 * float(lastErrorAlt));
-      }
+      Serial.print("ALT Transient ");
+      Serial.print(errorAlt);
+      Serial.print(' ');
+      Serial.print(lastErrorAlt);
+      Serial.print(' ');
+      Serial.println(0.2 * float(lastErrorAlt));
       celestronDriveMotor(DOWN, 0);
     }
     
-    if (verb == 2) Serial.println();
+    Serial.println();
     delay(25);
   }
   blinkLED();
-  if (verb == 1) {
-    Serial.println("Moved successfully!");
-  }
+  Serial.println("Aligned!");
 }
 
 //Figures out whether going in the normal direction or rolling over is shorter

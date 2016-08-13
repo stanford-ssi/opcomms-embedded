@@ -263,7 +263,8 @@ volatile unsigned long transmit_period = 400;
 
 void transmit_msg(char* msg, int m_length){
   cli();
-  noInterrupts()
+  Timer3.stop();
+  noInterrupts();
   if(transmitting){
     Serial.println("Currently Transmitting, please try again");
     interrupts(); //For some reason the interrupts() flag doesn't work. Used the above boolean instead.
@@ -294,6 +295,7 @@ void transmit_msg(char* msg, int m_length){
   //transmit_timer.begin(transmit_timer_tick, transmit_period);
   transmitting = true;
   Timer1.start();
+  Timer3.start();
   interrupts(); //For some reason the interrupts() flag doesn't work. Used the above boolean instead.
   sei();
 }
@@ -365,7 +367,8 @@ void reset_buffer(){
  */
 
 // Her Majesty, The Interrupt Service Routine
-// Runs at (currently) 11us intervals, interrupts begin after entering receive mode. 
+// Runs at (currently) 25us intervals and processes message given a signal during that interval
+// Of course there are some shenanigans with the timing that would make the court jester laugh but functional. 
 void receive_interrupt() {
   noInterrupts();
   if(analogRead(SENSOR_PIN) > sensorThreshold){
