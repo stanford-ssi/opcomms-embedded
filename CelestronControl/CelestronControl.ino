@@ -172,6 +172,9 @@ bool blinkState = 0;
 long currentAzm = -1;
 long currentAlt = -1;
 
+long ALTITUDE_OFFSET = 0;
+long AZIMUTH_OFFSET = 0;
+
 #include <TimerOne.h>
 #include <TimerThree.h>
 volatile bool transmitting = false;
@@ -236,6 +239,8 @@ void setup()
   long altTarget = 1000000;
 
   //Timer3.start();
+  //delay(1000);
+  //debugMovement();
 }
 
 void loop() // run over and over
@@ -260,6 +265,7 @@ void loop() // run over and over
 
     if(incomingByte == 'S') Serial.println(sampleSensor());
     if(incomingByte == 'G') celestronGoToPos(Serial.parseInt(),Serial.parseInt());
+    if(incomingByte == 'z') ludicrousGoToPos(Serial.parseInt(),Serial.parseInt(),100);
     if(incomingByte == 'E') imuGoToPos(double(Serial.parseFloat()),double(Serial.parseFloat()),0);
     if(incomingByte == 'V') vomitData = !vomitData;
     if(incomingByte == 'I') bnoVerbose = bnoVerbose != VERY_VERBOSE ? VERY_VERBOSE : 0;
@@ -268,9 +274,15 @@ void loop() // run over and over
       imuAzmOffset = double(Serial.parseFloat());
       imuAltOffset = double(Serial.parseFloat());
     }
+    if(incomingByte == 'N') {
+      celestronGoToPos(AZIMUTH_OFFSET, ALTITUDE_OFFSET);
+    }
     interrupts();
     if(incomingByte == 'A'){
       alignAFS();
+    }
+    if(incomingByte == 'g') {
+      alignGPS();
     }
     if(incomingByte == 'b') {
       double powah = getBeaconPower();

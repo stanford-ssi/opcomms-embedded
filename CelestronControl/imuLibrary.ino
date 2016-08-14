@@ -131,6 +131,40 @@ void loadCalibrationConstants(){
 }
 
 
+void imuZeroAlt() {
+
+  double currAltPos, errorAlt;
+  
+  for (int i=0; i<1000; i++) {
+    currAltPos = getIMUPos(ALT);
+    errorAlt = imuCalcSmallestError(currAltPos, 0);
+    Serial.println(abs(errorAlt));
+
+    if(abs(errorAlt) > 0.07){
+      if(errorAlt < -1.0){
+        celestronDriveMotor(DOWN, 9); //Note that these directions are flipped relative to the Celestron version
+      }else if(errorAlt > 1.0){
+        celestronDriveMotor(UP, 9);
+      }else if(errorAlt < -0.5){
+        celestronDriveMotor(DOWN, 7);
+      }else if(errorAlt > 0.5){
+        celestronDriveMotor(UP, 7);
+      }else if(errorAlt < -0.25){
+        celestronDriveMotor(DOWN, 6);
+      }else if(errorAlt > 0.25){
+        celestronDriveMotor(UP, 6);
+      }
+    } else {
+      celestronDriveMotor(UP, 0);
+      break;
+    }
+    
+    delay(25);
+  }
+  Serial.println("Went to");
+  Serial.println(currAltPos);
+}
+
 //Version of the celestronGoToPos, except driven by IMU readings
 void imuGoToPos(double azmPos, double altPos, int recursions){
   double currAzmPos = getIMUPos(AZM);
