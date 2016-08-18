@@ -94,29 +94,47 @@ long celestronRoughGetPos(char axis){
   return celestronListenForResponse(20); //Spend 20 milliseconds paused while reading back the queried position
 }
 
-void debugMovement() {
-  
-  int dir = RIGHT;
-  celestronDriveMotor(dir,9);
-  delay(3*1000);
-  celestronDriveMotor(dir,0);
+void debugMovement(int dir1, int dir2, int spd) {
+  Serial.println("GOING AT IT");
+  int dir = dir1;
+  //celestronDriveMotor(dir,9);
+  //delay(3*1000);
+  //celestronDriveMotor(dir,0);
   delay(5*1000);
   double avg = 0.0;
-  for (int i=0; i<6; i++) {
+  double ss = 0.0;
+  int n = 10;
+  double N = (double) n;
+  for (double i=0; i<5; i+=0.25) {
+    noInterrupts();
     long azm = celestronGetPos(AZM,false);
-    celestronDriveMotor(dir,3);
+    celestronDriveMotor(dir,spd);
     elapsedMicros initial;
-    delay(1000*10);
+    initial = 0;
+    while (initial < i*1000*1000);
     celestronDriveMotor(dir,0);
+    delay(25);
     long final = celestronGetPos(AZM,false);
-    double diff = abs(final-azm)/10.;
+    double diff = abs(final-azm)/((double) i);
     avg += diff;
+    ss += diff*diff;
+    Serial.print(i);
+    Serial.print(" ");
     Serial.println(diff);
-    dir = (dir == RIGHT) ? LEFT : RIGHT;
+    dir = (dir == dir1) ? dir2 : dir1;
+    interrupts();
+    delay(3*1000);
   }
-  avg = avg/(6.0);
-  Serial.println("Avg");
-  Serial.println(avg);
+  avg = avg/N;
+  double std = sqrt(ss/N - avg*avg);
+  Serial.println();
+  Serial.print(spd);
+  Serial.print(" ");
+  Serial.print("Avg:");
+  Serial.print(avg);
+  Serial.print(" Std: ");
+  Serial.println(std);
+  delay(1000);
 }
 
 void celestronStopCmd(){
@@ -133,8 +151,10 @@ void ludicrousGoToPos(long azmPos, long altPos, long absTol) {
   long currAzmPos = celestronGetPos(AZM,false);
   long currAltPos = celestronGetPos(ALT,false);
   int nSpeeds = 5;
-  long nums[] = {9,8,6,4,3};
-  long speeds[] = {120500,79204,12474,1558,775};
+  //long nums[] = {9,8,6,4,3};
+  //long speeds[] = {120500,79204,12474,1558,775};
+  long nums[] = {9,8,7,6,5,4,3,2,1};
+  long speeds[] = {126027,80846,46472,12474,3118,1560,776,192,95};
   elapsedMicros timing;
   double targetTime = -1;
   long errorAzm;
@@ -143,13 +163,16 @@ void ludicrousGoToPos(long azmPos, long altPos, long absTol) {
     
     if (timing > targetTime) {
       celestronDriveMotor(RIGHT, 0);
+      delay(25);
       currAzmPos = celestronGetPos(AZM,false);
       errorAzm = calcSmallestError(currAzmPos, azmPos);
       Serial.print("Error: ");
       Serial.println(errorAzm);
+      Serial.print("We're at: ");
+      Serial.println(currAzmPos);
       if (mx >= 10 || abs(errorAzm) <= absTol) break;
       for (int i=0; i<nSpeeds; i++) {
-        if (abs(errorAzm) >= speeds[i]*0.1 || i == nSpeeds-1) {
+        if (abs(errorAzm) >= speeds[i]*0.5 || i == nSpeeds-1) {
           celestronDriveMotor(errorAzm < 0 ? LEFT : RIGHT, nums[i]);
           timing = 0;
           targetTime = abs(errorAzm)/((double)speeds[i])*(1000000.0);
@@ -175,7 +198,7 @@ void ludicrousGoToPos(long azmPos, long altPos, long absTol) {
       Serial.println(errorAzm);
       if (mx >= 10 || abs(errorAzm) <= absTol) break;
       for (int i=0; i<nSpeeds; i++) {
-        if (abs(errorAzm) >= speeds[i]*0.1 || i == nSpeeds-1) {
+        if (abs(errorAzm) >= speeds[i]*0.5 || i == nSpeeds-1) {
           celestronDriveMotor(errorAzm < 0 ? UP : DOWN, nums[i]);
           timing = 0;
           targetTime = abs(errorAzm)/((double)speeds[i])*(1000000.0);

@@ -41,28 +41,28 @@ bool beaconState = true;
  */
 void alignAFS() {
   // Calibrate sampling loop so that we are sampling at the right frequency.
-  calibrateSampling();
+  //calibrateSampling();
 
   // Perform rough GPS align.
-  Serial.println("Loop calibrated. Press q to quit anytime. Where do you want to point? [e for EPC, l for lake, c for custom, q for quit, s for skip]");
+  Serial.println("Press q to quit anytime. Where do you want to point? [e for EPC, l for lake, c for custom, q for quit, s for skip]");
   while (!Serial.available());
   char c = Serial.read();
   double tgtLat, tgtLon, tgtAlt, srcLat, srcLon, srcAlt;
   if (c == 'q') return;
   if (c == 'l') {
-    tgtLat = 37.423341;
-    tgtLon = -122.175168;
+    tgtLat = 37.423027;
+    tgtLon = -122.174073;
     tgtAlt = 39.5;
-    srcLat = 37.423028;
-    srcLon = -122.174073;
+    srcLat = 37.424111;
+    srcLon = -122.177821;
     srcAlt = 44;
   }
   if (c == 'e') {
-    tgtLat = 37.423028;
-    tgtLon = -122.174073;
+    tgtLat = 37.424111;
+    tgtLon = -122.177821;
     tgtAlt = 44;
-    srcLat = 37.423341;
-    srcLon = -122.175168;
+    srcLat = 37.423027;
+    srcLon = -122.174073;
     srcAlt = 39.5;
   }
   if (c == 'c') {
@@ -99,6 +99,9 @@ void alignAFS() {
   
   IntervalTimer beacon;
   beacon.begin(laserBeacon, 1000000.0 / (2 * BEACON_FREQUENCY));
+  delay(25);
+  Serial.println("Calibrating loop...");
+  calibrateSampling();
   
   Serial.println("What's the angular size of the beacon? [try 0.2 degrees, idk]:");
   while (!Serial.available());
@@ -130,7 +133,7 @@ void generateRandomPoint(double* x, double* y) {
 void doCircles(long refAltitude, long refAzimuth, double refRadius) {
   long circleRadius = refRadius/360.*POSMAX;
   long initialRadius = circleRadius;
-  int HYPER = 10;
+  int HYPER = 6;
   double centerPower = hyperBeacon(HYPER);
   Serial.println("Initial power:");
   Serial.println(centerPower);
@@ -160,6 +163,7 @@ void doCircles(long refAltitude, long refAzimuth, double refRadius) {
         above_threshold++;
       }
       Serial.println(" Done.");
+      delay(25);
     }
 
     if (above_threshold >= 1) {
@@ -193,6 +197,10 @@ void doCircles(long refAltitude, long refAzimuth, double refRadius) {
     centerPower = hyperBeacon(HYPER);
   }
   Serial.println("Done!");
+  Serial.print("Center power: ");
+  Serial.println(centerPower);
+  Serial.print("Circle radius: ");
+  Serial.println(circleRadius);
 }
 
 double hyperBeacon(int n) {
@@ -423,7 +431,7 @@ double getBeaconPower() {
 }
 
 double getBeaconPower(double *elapsedTime) {
-  noInterrupts();
+  //noInterrupts();
 
   double totalPower = 0; // By Parseval's theorem, we don't need to calculate the full transform to get total power
   double realDFT = 0.0;
@@ -444,7 +452,7 @@ double getBeaconPower(double *elapsedTime) {
   }
 
   *elapsedTime = micros() - initialTime;
-  interrupts();
+  //interrupts();
   
   return (realDFT * realDFT + imagDFT * imagDFT) / (SAMPLE_COUNT * totalPower);
 

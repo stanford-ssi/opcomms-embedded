@@ -216,7 +216,7 @@ void setup()
 
   if(bnoEnabled){
     //bno.setMode(bno.OPERATION_MODE_NDOF); //Initializes IMU to ignore gyro, because gyros suck //DOESN'T ACTUALLY WORK lol
-    if(AUTOBOOT_IMU) loadCalibrationConstants(); //Load calibration constants from the EEPROM automatically if requested
+    //if(AUTOBOOT_IMU) loadCalibrationConstants(); //Load calibration constants from the EEPROM automatically if requested
   }
 
   analogReadResolution(STANDARD_PRECISION);
@@ -239,8 +239,17 @@ void setup()
   long altTarget = 1000000;
 
   //Timer3.start();
-  //delay(1000);
-  //debugMovement();
+  /*delay(1000);
+  //debugMovement(RIGHT, LEFT, 9);
+  //debugMovement(RIGHT, LEFT, 8);
+  debugMovement(RIGHT, LEFT, 7);
+  debugMovement(RIGHT, LEFT, 6);
+  debugMovement(RIGHT, LEFT, 5);
+  debugMovement(RIGHT, LEFT, 4);
+  debugMovement(RIGHT, LEFT, 3);
+  debugMovement(RIGHT, LEFT, 2);
+  debugMovement(RIGHT, LEFT, 1);*/
+  //debugMovement(RIGHT, LEFT, 5);
 }
 
 void loop() // run over and over
