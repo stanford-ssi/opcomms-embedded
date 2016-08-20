@@ -53,86 +53,73 @@ bool checkSensor(int pin){
         populates MSG_BUF_LEN with received bytes
 */
 
-int listen_for_msg(){
-  int charsRead = 0;
-  bool stopChar = 0;
-  char charBeingRead;
-  int samplesCounted;
-
-
-noInterrupts();
-
-  elapsedMillis waiting;
-//  digitalWrite(LED, HIGH);
-//  //while(checkSensor(SENSOR_PIN)==0){} //Note: this hangs the board
-//  while(checkSensor(SENSOR_PIN)==0 && !Serial.available()){} //Note: this hangs the board until a message arrives or other input received, whatever comes first
-//  digitalWrite(LED, LOW);
+//int listen_for_msg(){
+//  int charsRead = 0;
+//  bool stopChar = 0;
+//  char charBeingRead;
+//  int samplesCounted;
 //
-//  if(Serial.available()){
-//    waitMode = false;
-//    return -1; //Time out if input receiced
+//
+//noInterrupts();
+//
+//  elapsedMillis waiting;
+//  
+//  while(charsRead < MSG_BUF_LEN && stopChar == 0){
+//
+//    //The 4 here needs to be changed to accept a different PPM value and I couldn't think of a smart way of doing it in advance
+//    for(int i = 0; i < 4; i++){     //done 4 times to assemble byte
+//      delayMicroseconds(highTime); //Let start pulse pass (should be 100 microsecs)
+//      samplesCounted = 0;           //resets every iteration (4 times/byte)
+//
+//      //  EOP check
+//      while(checkSensor(SENSOR_PIN)==1){
+//        samplesCounted++;
+//      }
+//      if(samplesCounted > 20){  //  may cost some time
+//        stopChar = 1; //detect end of packet
+//        //Serial.println("EOP");
+//      }
+//
+//      if(!stopChar){
+//        samplesCounted = 0;
+//        while(samplesCounted < 100 && checkSensor(SENSOR_PIN)==0){
+//          samplesCounted++;
+//          delayMicroseconds(sampleTime);    //~drift may be caused by sampleTime 
+//        }
+//
+//        if(samplesCounted >= 100) stopChar = 1; //Detect failure and terminate packet
+//         
+//        samplesCounted = samplesCountedToNibblet(samplesCounted);
+//        charBeingRead = (charBeingRead << N_BITS) | samplesCounted; //Moves existing bits to the left, inserts new bits on right
+//      }
+//    }
+//    
+//    if(!stopChar){
+//      msgBuf[charsRead] = charBeingRead;
+//      charsRead++;
+//    }
+//    
 //  }
-  
-  while(charsRead < MSG_BUF_LEN && stopChar == 0){
+//
+//  interrupts();
+//  return charsRead;
+//
+//}
 
-    //The 4 here needs to be changed to accept a different PPM value and I couldn't think of a smart way of doing it in advance
-    for(int i = 0; i < 4; i++){     //done 4 times to assemble byte
-      delayMicroseconds(highTime); //Let start pulse pass (should be 100 microsecs)
-      samplesCounted = 0;           //resets every iteration (4 times/byte)
-
-      //  EOP check
-      while(checkSensor(SENSOR_PIN)==1){
-        samplesCounted++;
-      }
-      if(samplesCounted > 20){  //  may cost some time
-        stopChar = 1; //detect end of packet
-        //Serial.println("EOP");
-      }
-
-      if(!stopChar){
-        samplesCounted = 0;
-        while(samplesCounted < 100 && checkSensor(SENSOR_PIN)==0){
-          samplesCounted++;
-          delayMicroseconds(sampleTime);    //~drift may be caused by sampleTime 
-        }
-
-        if(samplesCounted >= 100) stopChar = 1; //Detect failure and terminate packet
-  
-        /*Serial.print(micros());
-        Serial.print(' ');*/
-        //Serial.println(samplesCounted);
-         
-        samplesCounted = samplesCountedToNibblet(samplesCounted);
-        charBeingRead = (charBeingRead << N_BITS) | samplesCounted; //Moves existing bits to the left, inserts new bits on right
-      }
-    }
-    
-    if(!stopChar){
-      msgBuf[charsRead] = charBeingRead;
-      //Serial.println(charBeingRead);
-      charsRead++;
-    }
-  }
-
-  interrupts();
-  return charsRead;
-
-}
-
-/*Function: samplesCountedToNibblet
- * 
- * Postconditions:
- *      returns the actual bits of data represented by samplesCounted
- * 
- * Method of Operation:
- *      samplesCounted should equal the number of low intervals observed,
- *      leftshifted by sampleTimeShiftVal. This function rightshifts to
- *      correct for that and then subtracts 1 to make 1 interval correspond
- *      to 0, 2 intervals to 1, etc. 
- *      
- * This function is discrete only because this comment block would have
- * to be stupidly long in an already long function
- */
+///*Function: samplesCountedToNibblet
+// * 
+// * Postconditions:
+// *      returns the actual bits of data represented by samplesCounted
+// * 
+// * Method of Operation:
+// *      samplesCounted should equal the number of low intervals observed,
+// *      leftshifted by sampleTimeShiftVal. This function rightshifts to
+// *      correct for that and then subtracts 1 to make 1 interval correspond
+// *      to 0, 2 intervals to 1, etc. 
+// *      
+// * This function is discrete only because this comment block would have
+// * to be stupidly long in an already long function
+// */
  
 int samplesCountedToNibblet(int samplesCounted){
   if(samplesCounted == 3) samplesCounted++; //SUPER HACKY - really short lows will occasionally be dropped, so this helps correct for that
@@ -227,15 +214,15 @@ void query(bool dangerous){
 
 
 
-//*******Below is the alternative transmit interrupt code***************************************************************
-//**********************************************************************************************************************
-//**********************************************************************************************************************
-//**********************************************************************************************************************
-//**********************************************************************************************************************
+/*******Below is the alternative transmit interrupt code***************************************************************
+**********************************************************************************************************************
+**********************************************************************************************************************
+**********************************************************************************************************************
+**********************************************************************************************************************/
 
 
 //Swapping to Timer1 library: http://www.pjrc.com/teensy/td_libs_TimerOne.html
-
+#include <TimerOne.h>
 
 
 //IntervalTimer transmit_timer;
@@ -250,21 +237,10 @@ volatile bool laser_on = false;
 volatile unsigned long last_period = 0;
 volatile unsigned long time_since_ten = 0;
 volatile int periods_since_ten = 0;
-
-#include <TimerOne.h>
 volatile unsigned long transmit_period = 400;
-//volatile unsigned long transmit_period = 100;// + clock_offset;
-
-//void hi_setup(){
-//  Timer1.initialize(transmit_period);
-//  Timer1.attachInterrupt(transmit_timer_tick);
-//  Timer1.stop();
-//}
 
 void transmit_msg(char* msg, int m_length){
-  cli();
-  Timer3.stop();
-  noInterrupts();
+  Timer1.stop();
   if(transmitting){
     Serial.println("Currently Transmitting, please try again");
     interrupts(); //For some reason the interrupts() flag doesn't work. Used the above boolean instead.
@@ -278,40 +254,23 @@ void transmit_msg(char* msg, int m_length){
   }
   Serial.println(msg);
   for(int i=0; i<msg_length/4; i++){
-       Serial.print(msg[i]);
-       Serial.print(" encoded to: ");
-      
        for(int j=3; j>=0; j--){
-        msg_buffer[i*4+3-j] = ((msg[i]&(0b11<<j*2))>>j*2);
-        Serial.print(msg_buffer[i*4+3-j]);
         //Bit mask each value in the ascii char, then shift it back to only two bits.
         //Place the values in the proper order in the buffer
+        msg_buffer[i*4+3-j] = ((msg[i]&(0b11<<j*2))>>j*2);
        }
-       Serial.println("");
   }
+  
   msg_buffer[msg_length] = (0b1<<N_BITS)+1 +1; //Encodes the EOF wait time at end of buffer.
-  Serial.print("Added eof: ");
-  Serial.println((0b1<<N_BITS)+1);
-  //transmit_timer.begin(transmit_timer_tick, transmit_period);
   transmitting = true;
   Timer1.start();
-  Timer3.start();
-  interrupts(); //For some reason the interrupts() flag doesn't work. Used the above boolean instead.
-  sei();
+  //interrupts(); //For some reason the interrupts() flag doesn't work. Used the above boolean instead.
+  //sei();
 }
 
 void transmit_timer_tick(){
   noInterrupts();
   bool eom = buffer_location>msg_length-1;
-//  Serial.print(" buffer location: "); 
-//  Serial.print(buffer_location);
-//  Serial.print(" time waited: ");
-//  Serial.print(time_waited);
-//  Serial.print(" ");
-//  Serial.print(laser_on);
-//  Serial.print(" ");
-//  Serial.print(last_period);
-//  last_period = micros();
   
   if(time_waited == 0){//Just got to this buffer_location, send starting pulse
     digitalWrite(LASER, HIGH);
@@ -321,7 +280,7 @@ void transmit_timer_tick(){
     interrupts(); 
     return;
   }
-  if(time_waited>0 & laser_on & !eom){//Finish the starting pulse, if EOM keep the laser on for the long pulse.
+  if(time_waited>0 && laser_on && !eom){//Finish the starting pulse, if EOM keep the laser on for the long pulse.
     digitalWrite(LASER,LOW);
     laser_on = false;
   }
@@ -359,179 +318,166 @@ void reset_buffer(){
   msg_length = 0;
 }
 
-
-
 /* ============================================================================
- * Hardware Interrupt Reciever Code implemented with listen_for_msg();
+ * Hardware Interrupt Reciever Code With Correlator
+ * M Taylor and E Millares
+ * Aug 19th 2016
  * ============================================================================
  */
+// CONSTANTS
+static const int oversamplingRatio = 5;
+bool timing_lock = false;
+//int decision_threshold = 0;
+//int noise_threshold = 0;
 
-// Her Majesty, The Interrupt Service Routine
-// Runs at (currently) 25us intervals and processes message given a signal during that interval
-// Of course there are some shenanigans with the timing that would make the court jester laugh but functional. 
+// VOLATILE
+volatile int sample_buffer[oversamplingRatio] = {0};
+volatile int sample_buffer_counter = 0;
+volatile int correlator_buffer[oversamplingRatio] = {0};
+volatile int next_sample_counter = 0;
+volatile int since_last_high = 0;
+volatile bool msg_done = false;
+volatile bool msg_error = false;
+volatile int two_bit_count = 0;
+volatile int charsRead = 0;
+volatile char charBeingRead;
+
+// Entire decode operation taken over by Timer 3 interrupt. No more calling functions with delays.
 void receive_interrupt() {
+// TEMP VARIABLES
+// value to store this samples new correlator output
+int correlator_value = 0;
+int early = 0;
+int late = 0;
+int sample = 0;
+int ELG_avg = 0;
+  
   noInterrupts();
-  if(analogRead(SENSOR_PIN) > sensorThreshold){
-   listen_for_msg();
-   Serial.println(msgBuf);
-   clearMsgBuf();
-  }
-  interrupts();
+
+// CALCULATE DECISION THRESHOLD
+// This can really be done in the calibration measurement function, but if we want to make it adaptive it could happen here too.
+// TODO: ADD VARIANCE FROM SAMPLE TIMING UNCERTAINTY USING EARLY LATE GATE WITH FIXED SAMPLE INTERVALS (should be ~2xsample time /12 variance -> correlator slope)
+
+
+// ACQUIRE NEW SAMPLE
+// order of samples does not matter, only need to keep last (oversamplingRatio) worth of samples for correlator
+sample_buffer[sample_buffer_counter] = analogRead(SENSOR_PIN);
+sample_buffer_counter ++;
+if (sample_buffer_counter == oversamplingRatio){
+  sample_buffer_counter = 0;
 }
 
-
-/* ============================================================================
- * Hardware Interrupt Reciever Code using Buffers
- * ! Now Defunct :( !
- * ============================================================================
- */
-
-// Constants
-const int msg_length_max = 64;                                // Maximum Size of A Given Message
-const int analog_buffer_size = 2048;                          // Maximum Size of the Global Analog Buffer
-const int pro_size = 256;                                     // Size of the buffer to be processed in each chunk. Designed for one char each time
-
-
-// Volatiles
-volatile int analog_buffer[analog_buffer_size] = {0};         // His Majesty, The Global Analog Buffer
-volatile int glob_analog_buffer_index;                        // Refers to the "placing index" for the ISR
-volatile int glob_analog_buffer_processing_index = 0;         // Refers to the index of the Global Analog Buffer where chunk processing begins
-volatile int chars_read_so_far = 0;
-volatile char received_message_buffer[msg_length_max] = {0};
-volatile bool received_message_ready = false;                 // Flag indicating if a received message is available
-//volatile bool start_msg_decode = false;
-
-/*
- * Function: bool aboveThreshold(int i)
- * --------------------------------------------------
- * Predicate function returning if a value is above the threshold for activation
- *
- */
-bool aboveThreshold(int i) {
-  return (i > sensorThreshold);
+// making space for new correlator value output
+// keeping order of values
+for (int i = 0 ; i < (oversamplingRatio-1) ; i++){
+  correlator_buffer[i] = correlator_buffer[i+1];
 }
 
+// calculate new correlator value
+for (int i = 0 ; i<oversamplingRatio ;i++){
+  correlator_value = correlator_value + sample_buffer[i];
+}
+// normalize energy of correlator (divide by # of points)
+correlator_value = correlator_value/oversamplingRatio;
 
-/*
- * bool chunkAvailable(int main_buffer_index, int starting_index)
- * --------------------------------------------------
- * Predicate function returning if our chunk is large enough for processing
- *
- */
-bool chunkAvailable(int main_buffer_index, int starting_index) {
-  if ((main_buffer_index - starting_index) < pro_size && (main_buffer_index - starting_index + analog_buffer_size < pro_size)) return true;
-  return false;
+correlator_buffer[oversamplingRatio] = correlator_value;
+early = correlator_buffer[1];
+late  = correlator_buffer[3];
+sample = correlator_buffer[2];
+
+ELG_avg = (early + late + sample )/3;
+
+// search for first correlator peak
+// when the first sample before and first sample after are both lower than the middle one, you should be on the peak of the correlator triangle
+// this should REALLY not be a one-shot estimation, it should be trying to find the peak over many pulses to gaurentee it is properly aligned
+// but since we need it to start decoding RIGHT AWAY, this is a problem.
+// the criteria for all three points not being noise is currently set to be that their average is at least 0.5* the expected decision threshold from measurements.
+// This will proably need tweaking.
+if ((timing_lock == false) && (early < sample) && (late<sample) && (ELG_avg>0.5*decision_threshold)){
+  timing_lock = true;
+  next_sample_counter = 0;
 }
 
+// EARLY LATE GATE and DECISION THRESHOLD
+// chooses best sample for this pulse
 
-
-/*
- * void print_message_buffer()
- * --------------------------------------------------
- * Prints a received message!
- *
- */
-void print_message_buffer() {
-  noInterrupts();
-  char loc_msg_buff[msg_length_max];                        // Initialize Local Message Buffer Array
-  for (int j = 0; j < msg_length_max; j++) {                // Copies characters from volatile global
-    loc_msg_buff[j] = received_message_buffer[j];
-    received_message_buffer[j] = 0;                         // Clears buffer as its read
-  }
-  received_message_ready = false;                           // Toggle flag
-  interrupts();
-  Serial.println(loc_msg_buff);                             // Send message to serial
-}
-
-void print_buffer(){
-  noInterrupts();
-    for (int i = 0; i < glob_analog_buffer_index; i++){
-      Serial.print(analog_buffer[i]);
-      Serial.print(", ");
-      Serial.println(" ");
-    }
-  interrupts();
-}
-
-/*
- * Function: void decode_msg_buffer()
- * --------------------------------------------------
- * Monitors the buffer that is filled with every ADC trigger. Must be placed in the main loop function.
- *
- */
-void decode_msg_buffer() {
-  Serial.println("Hello! I'm here at the beginning!");
-  // Takes local copies of all global vars.
-  noInterrupts();
-  int starting_index = glob_analog_buffer_processing_index;                      // Starting_index refers to global position of chunk processing
-  int an_buffer[pro_size];                                                       // Refers to local copy of analog buffer, hereby referred to as "the chunk"
-  for (int j = 0; j < pro_size; j++) {                                           // Populate the chunk from the global buffer
-    an_buffer[j] = analog_buffer[(j + starting_index) % analog_buffer_size];     // Wrap Around
-  }
-  int main_buffer_index = glob_analog_buffer_index;                              // Refers to the "placing index"
-  interrupts();
-
-
-  // Looks to see if a message is ready to be printed. If not, it parses some more.
-  if (received_message_ready) {
-    print_message_buffer();
-    return;
-  }
-
-
-
-  //All the buffer alignment, index position checks, etc.
-  if (chunkAvailable(main_buffer_index, starting_index)) return;         // Chunk to be processed too small - We're too close to the current sampling index. Try again later.
-  int curr_index = 0;
-  while (!aboveThreshold(an_buffer[curr_index])) {
-    curr_index++;                                                       // Normalizes us so we always start the decoding (the for loop below) at the initial laser pulse
-  }
-  if (curr_index > 10) {                                               // Did not start close to a starting pulse; no messages to see or mean mis-aligned timing. Advances through periods of darkness.
-    noInterrupts();
-    glob_analog_buffer_processing_index = (starting_index + pro_size) % analog_buffer_size; // Advances the index where we would begin chunk processing.
-    interrupts();
-    return;
-  }
-
-
-  //Decoding the buffer now into an actual byte.
-  char char_being_read;
-
-  for (int k = 0; k < 4; k++) {
-    Serial.println("Hello! I'm here!");
-    while (an_buffer[curr_index] >= sensorThreshold) {
-      curr_index++;                                                   // Moves past initial pulse
-    }
-    if (curr_index > 20) {                                            //Psyche, initial pulse was the EOF pulse. Message now ready to be sent.
-      noInterrupts();
-      received_message_ready = true;
-      interrupts();
-      return;
+// if you think you are looking at the right samples and are roughly symbol aligned
+if(timing_lock == true){
+  // if it's time to make a decision
+  if(next_sample_counter == 0){
+    // try to "balance" on the peak of the correlator curve
+    if(early > sample && late < sample){
+      // if the sample before where you think the peak is turns out to be bigger than the peak you are sampling too slow, drop a sample to speed up
+      next_sample_counter = oversamplingRatio -1;
+      sample = early;
+    } else if (late > sample && early < sample){
+      // if the sample after where you think the peak is turns out to be bigger than the peak you are sampling too fast, add a sample to slow down
+      next_sample_counter = oversamplingRatio +1;  
+      sample = late;    
+    } else{
+      // otherwise you are right on time
+      next_sample_counter = oversamplingRatio;
     }
 
-    int samples_counted = 0;
+    // SYMBOL DECISION
+    if(sample>decision_threshold){
+      // if the correlator value is above the threshold, you are estimating that a pulse was sent here
+      if((since_last_high == 0 && msg_done == false)){
+        // if you see two high pulses back to back, the message is done
+        msg_done = true;
+      } else if(since_last_high <5 && msg_done == false){
+        // DECODE 
+        // if buffer is full stop and print what you have
+        if(charsRead>=MSG_BUF_LEN){
+          msg_done = true;
+          msg_error = true;
+          two_bit_count = 4;
+          charBeingRead = 0;
+          charsRead = 0;
+        }
+        
+        //4 symbols to fill 1 char
+        // 1024 max chars in buffer
+        if(two_bit_count==0){
+          msgBuf[charsRead] = charBeingRead;
+          charsRead++;  
+          charBeingRead = 0;
+          two_bit_count = 4;
+        } else {
+            charBeingRead = charBeingRead + ((since_last_high-1)&0b11 << two_bit_count);
+            two_bit_count--;
+        }
 
-    while (an_buffer[curr_index] < sensorThreshold) {       //Counts number of samples between initial pulse and following pulse.
-      curr_index++;
-      samples_counted++;
-      if (curr_index >= pro_size) {               //ERROR: Finishing pulse not found.
-        noInterrupts();
-        glob_analog_buffer_processing_index = (starting_index + pro_size) % analog_buffer_size;
-        interrupts();
-        return;
+        
+      } else if(since_last_high >=5){
+        // you shouldnt be able to count more than 4 spaces between pulses while a message is on, if you can then something is up
+        msg_done=true;
+        msg_error=true;
       }
-    }
+    } else {
+      // otherwise you are assuming there was no pulse
+      if(msg_done = false){
+        // if you are still in the message, keep counting blank spaces between high pulses
+        since_last_high++;
+      }
+    }   
+  } else {
+    // if you think you are counting things out right but its not time to make a decision, then wait until it is
+    next_sample_counter --;
+  }
+}
 
-    samples_counted = samplesCountedToNibblet(samples_counted);
+// DISPLAY MESSAGE
+if(msg_done){
+  Serial.println(msgBuf);
+  Serial.println(msg_error);
+  clearMsgBuf();
+  charsRead = 0;
+  charBeingRead = 0;
+  two_bit_count = 4;
+  msg_done = false;
+  timing_lock = false;
+}
 
-    char_being_read = (char_being_read << 2) | samples_counted; //Moves existing bits to the left, inserts new bits on right. Magic number 2 comes from the number of bits decoded with each symbol.
-  }//end for
-
-
-  noInterrupts();
-  received_message_buffer[chars_read_so_far] = char_being_read;
-  chars_read_so_far++;
-  glob_analog_buffer_processing_index = (starting_index + curr_index) % analog_buffer_size; //Possible Bug, may be starting one before the pulse window. Double check.
   interrupts();
-  return;
 }
