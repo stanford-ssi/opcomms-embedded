@@ -173,7 +173,7 @@ long currentAlt = -1;
 double mean, mean0, mean1, var, var0, var1, stdev, stdev0, stdev1;
 static const int calibration_buffer_length = 1024;
 int calibration_buffer[calibration_buffer_length] = {0};
-float decision_threshold = 0;
+float decision_threshold = 1023; // SET WITH MEASURE FIRST
 
 #include <TimerOne.h>
 #include <TimerThree.h>
@@ -188,7 +188,7 @@ void setup()
   Timer1.attachInterrupt(transmit_timer_tick);
   Timer1.stop();
   
-  Timer3.initialize(20);
+  Timer3.initialize(100/5);
   Timer3.attachInterrupt(receive_interrupt);
   Timer3.stop();
 
@@ -361,6 +361,7 @@ void loop() // run over and over
       } else {
         receiveMode = true;
         Timer3.start();
+        //interrupts();
         Serial.println("receiveMode ON");
       }
      /* Serial.println("Waiting for msg:");
@@ -447,12 +448,11 @@ void loop() // run over and over
           Serial.println(stdev);
         }
 
-        decision_threshold = mean1-mean0/(stdev1+stdev0);
+        decision_threshold = (stdev0*mean1+stdev1*mean0)/(stdev1+stdev0);
         Serial.println("Decision Threashold:");
         Serial.println(decision_threshold);
 
-        Serial.println("Restarting Rx Timer.");
-        Timer3.start();
+        Serial.println("Restarting Interrupts (Timer3 stopped).");
         interrupts();
         
       }while(incomingByte != 'q');  

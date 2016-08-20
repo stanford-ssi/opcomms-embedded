@@ -326,7 +326,6 @@ void reset_buffer(){
  */
 // CONSTANTS
 static const int oversamplingRatio = 5;
-bool timing_lock = false;
 //int decision_threshold = 0;
 //int noise_threshold = 0;
 
@@ -338,9 +337,14 @@ volatile int next_sample_counter = 0;
 volatile int since_last_high = 0;
 volatile bool msg_done = false;
 volatile bool msg_error = false;
-volatile int two_bit_count = 0;
+volatile int two_bit_count = 3;
 volatile int charsRead = 0;
-volatile char charBeingRead;
+volatile int charBeingRead;
+volatile bool msg_start = false;
+volatile bool timing_lock = false;
+volatile int onecount = 0;
+volatile int zerocount = 0;
+
 
 // Entire decode operation taken over by Timer 3 interrupt. No more calling functions with delays.
 void receive_interrupt() {
@@ -362,6 +366,7 @@ int ELG_avg = 0;
 // ACQUIRE NEW SAMPLE
 // order of samples does not matter, only need to keep last (oversamplingRatio) worth of samples for correlator
 sample_buffer[sample_buffer_counter] = analogRead(SENSOR_PIN);
+//Serial.println(sample_buffer[sample_buffer_counter]);
 sample_buffer_counter ++;
 if (sample_buffer_counter == oversamplingRatio){
   sample_buffer_counter = 0;
@@ -379,23 +384,26 @@ for (int i = 0 ; i<oversamplingRatio ;i++){
 }
 // normalize energy of correlator (divide by # of points)
 correlator_value = correlator_value/oversamplingRatio;
+//Serial.println(correlator_value);
 
-correlator_buffer[oversamplingRatio] = correlator_value;
+correlator_buffer[oversamplingRatio-1] = correlator_value;
 early = correlator_buffer[1];
 late  = correlator_buffer[3];
 sample = correlator_buffer[2];
 
 ELG_avg = (early + late + sample )/3;
-
+//Serial.println(ELG_avg);
 // search for first correlator peak
 // when the first sample before and first sample after are both lower than the middle one, you should be on the peak of the correlator triangle
 // this should REALLY not be a one-shot estimation, it should be trying to find the peak over many pulses to gaurentee it is properly aligned
 // but since we need it to start decoding RIGHT AWAY, this is a problem.
 // the criteria for all three points not being noise is currently set to be that their average is at least 0.5* the expected decision threshold from measurements.
 // This will proably need tweaking.
-if ((timing_lock == false) && (early < sample) && (late<sample) && (ELG_avg>0.5*decision_threshold)){
+if ((timing_lock == false) && ( ((early < sample) && sample>decision_threshold ) || ((late<sample) && sample>decision_threshold)) && (correlator_buffer[0]<decision_threshold || correlator_buffer[4]<decision_threshold)){
   timing_lock = true;
+  msg_start = true;
   next_sample_counter = 0;
+  since_last_high = 0;
 }
 
 // EARLY LATE GATE and DECISION THRESHOLD
@@ -405,33 +413,39 @@ if ((timing_lock == false) && (early < sample) && (late<sample) && (ELG_avg>0.5*
 if(timing_lock == true){
   // if it's time to make a decision
   if(next_sample_counter == 0){
+    
     // try to "balance" on the peak of the correlator curve
-    if(early > sample && late < sample){
+    if(early > sample && late < sample && early > decision_threshold){
       // if the sample before where you think the peak is turns out to be bigger than the peak you are sampling too slow, drop a sample to speed up
-      next_sample_counter = oversamplingRatio -1;
+      next_sample_counter = oversamplingRatio -2;
       sample = early;
-    } else if (late > sample && early < sample){
+    } else if (late > sample && early < sample && late > decision_threshold){
       // if the sample after where you think the peak is turns out to be bigger than the peak you are sampling too fast, add a sample to slow down
-      next_sample_counter = oversamplingRatio +1;  
+      next_sample_counter = oversamplingRatio;  
       sample = late;    
     } else{
       // otherwise you are right on time
-      next_sample_counter = oversamplingRatio;
+      next_sample_counter = oversamplingRatio-1;
     }
 
     // SYMBOL DECISION
     if(sample>decision_threshold){
+      //Serial.println("1");
       // if the correlator value is above the threshold, you are estimating that a pulse was sent here
-      if((since_last_high == 0 && msg_done == false)){
+      if(since_last_high >=10){
         // if you see two high pulses back to back, the message is done
         msg_done = true;
-      } else if(since_last_high <5 && msg_done == false){
+        timing_lock = false;
+        since_last_high = 0;
+      } else if(since_last_high <5 && since_last_high >0){
         // DECODE 
         // if buffer is full stop and print what you have
+        
         if(charsRead>=MSG_BUF_LEN){
           msg_done = true;
+          timing_lock = false;
           msg_error = true;
-          two_bit_count = 4;
+          two_bit_count = 3;
           charBeingRead = 0;
           charsRead = 0;
         }
@@ -439,27 +453,28 @@ if(timing_lock == true){
         //4 symbols to fill 1 char
         // 1024 max chars in buffer
         if(two_bit_count==0){
+          charBeingRead = charBeingRead + (((since_last_high-1)&0b11) << (2*two_bit_count));
           msgBuf[charsRead] = charBeingRead;
           charsRead++;  
           charBeingRead = 0;
-          two_bit_count = 4;
+          two_bit_count = 3;
         } else {
-            charBeingRead = charBeingRead + ((since_last_high-1)&0b11 << two_bit_count);
+            charBeingRead = charBeingRead + (((since_last_high-1)&0b11) << (2*two_bit_count));
             two_bit_count--;
         }
-
-        
-      } else if(since_last_high >=5){
-        // you shouldnt be able to count more than 4 spaces between pulses while a message is on, if you can then something is up
-        msg_done=true;
-        msg_error=true;
-      }
+        since_last_high = 0;
+      } 
     } else {
       // otherwise you are assuming there was no pulse
-      if(msg_done = false){
+        //Serial.println("0");
+      if(since_last_high >=10){
+        // if you see two high pulses back to back, the message is done
+        msg_done = true;
+        timing_lock = false;
+        since_last_high = 0;
+      }        
         // if you are still in the message, keep counting blank spaces between high pulses
         since_last_high++;
-      }
     }   
   } else {
     // if you think you are counting things out right but its not time to make a decision, then wait until it is
@@ -469,12 +484,12 @@ if(timing_lock == true){
 
 // DISPLAY MESSAGE
 if(msg_done){
+  Serial.println("Message:");
   Serial.println(msgBuf);
-  Serial.println(msg_error);
   clearMsgBuf();
   charsRead = 0;
   charBeingRead = 0;
-  two_bit_count = 4;
+  two_bit_count = 3;
   msg_done = false;
   timing_lock = false;
 }
