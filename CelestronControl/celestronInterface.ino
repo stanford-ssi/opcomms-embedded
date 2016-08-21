@@ -68,10 +68,13 @@ long celestronGetPos(char axis, bool dangerous){
   if(dangerous) return verifyPos; //Fuck error checking
   
   long tentativePos = verifyPos + POS_TOLERANCE + 1; //Make value guaranteed to fail test
+
+  int i = 0;
   
-  while(abs(verifyPos-tentativePos) > POS_TOLERANCE){ //If positions are not within tolerance, keep polling
+  while(abs(verifyPos-tentativePos) > POS_TOLERANCE || i < 3){ //If positions are not within tolerance, keep polling
     tentativePos = verifyPos;
     verifyPos = celestronRoughGetPos(axis);
+    i++;
   }
   
   return(verifyPos);
@@ -148,6 +151,10 @@ void celestronStopCmd(bool shouldWait){ //Stop motion in both axes and wait 600 
 }
 
 void ludicrousGoToPos(long azmPos, long altPos, long absTol) {
+  ludicrousGoToPos(azmPos, altPos, absTol, POSMAX);
+}
+
+void ludicrousGoToPos(long azmPos, long altPos, long absTol, long stopThreshold) {
   long currAzmPos = celestronGetPos(AZM,false);
   long currAltPos = celestronGetPos(ALT,false);
   int nSpeeds = 5;
@@ -166,6 +173,13 @@ void ludicrousGoToPos(long azmPos, long altPos, long absTol) {
       delay(25);
       currAzmPos = celestronGetPos(AZM,false);
       errorAzm = calcSmallestError(currAzmPos, azmPos);
+      if (errorAzm > stopThreshold) {
+        Serial.println("I was about to do something stupid. I'll stop now.");
+        Serial.println(currAzmPos);
+        Serial.println(azmPos);
+        Serial.println(errorAzm);
+        return;
+      }
       Serial.print("Error: ");
       Serial.println(errorAzm);
       Serial.print("We're at: ");
@@ -185,6 +199,7 @@ void ludicrousGoToPos(long azmPos, long altPos, long absTol) {
       mx++;
     }
   }
+  Serial.println("Azm done");
   mx = 0;
   timing = 0;
   targetTime = -1;
@@ -194,8 +209,17 @@ void ludicrousGoToPos(long azmPos, long altPos, long absTol) {
       celestronDriveMotor(DOWN, 0);
       currAzmPos = celestronGetPos(ALT,false);
       errorAzm = calcSmallestError(currAzmPos, altPos);
+      if (errorAzm > stopThreshold) {
+        Serial.println("I was about to do something stupid. I'll stop now.");
+        Serial.println(currAzmPos);
+        Serial.println(altPos);
+        Serial.println(errorAzm);
+        return;
+      }
       Serial.print("Error: ");
       Serial.println(errorAzm);
+      Serial.print("We're at: ");
+      Serial.println(currAzmPos);
       if (mx >= 10 || abs(errorAzm) <= absTol) break;
       for (int i=0; i<nSpeeds; i++) {
         if (abs(errorAzm) >= speeds[i]*0.5 || i == nSpeeds-1) {

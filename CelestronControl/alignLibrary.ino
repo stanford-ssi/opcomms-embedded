@@ -18,9 +18,9 @@
  *  - Lol it's terribly untested..
  */
 
-double BEACON_FREQUENCY = 1000; // Hertz
 double SAMPLE_FREQUENCY = 5000; // Hertz. Per Mr. Nyquist, this must be bigger than 2*BEACON_FREQUENCY
 double EFFECTIVE_SAMPLE_FREQUENCY = SAMPLE_FREQUENCY;
+double DC_OFFSET = 0;
 double SAMPLING_LOOP_DELAY = 0; // In microseconds. To adjust for suboptimal loop times.
 int SAMPLE_COUNT = 30;
 double EARTH_RADIUS = 6371009;
@@ -41,7 +41,7 @@ bool beaconState = true;
  */
 void alignAFS() {
   // Calibrate sampling loop so that we are sampling at the right frequency.
-  //calibrateSampling();
+  calibrateSampling();
 
   // Perform rough GPS align.
   Serial.println("Press q to quit anytime. Where do you want to point? [e for EPC, l for lake, c for custom, q for quit, s for skip]");
@@ -133,7 +133,7 @@ void generateRandomPoint(double* x, double* y) {
 void doCircles(long refAltitude, long refAzimuth, double refRadius) {
   long circleRadius = refRadius/360.*POSMAX;
   long initialRadius = circleRadius;
-  int HYPER = 6;
+  int HYPER = 10;
   double centerPower = hyperBeacon(HYPER);
   Serial.println("Initial power:");
   Serial.println(centerPower);
@@ -142,7 +142,7 @@ void doCircles(long refAltitude, long refAzimuth, double refRadius) {
   double goodAzms[BATCH_SIZE] = {0};
   double goodPwrs[BATCH_SIZE] = {0};
   
-  while ((centerPower <= AWESOME_THRESHOLD) && (circleRadius*360.0/POSMAX >= POINTING_ACCURACY)) {
+  while ((centerPower <= AWESOME_THRESHOLD) || (circleRadius*360.0/POSMAX >= POINTING_ACCURACY)) {
     Serial.print("Looking at ");
     Serial.print(BATCH_SIZE);
     Serial.print(" points within a radius of ");
@@ -154,16 +154,26 @@ void doCircles(long refAltitude, long refAzimuth, double refRadius) {
       Serial.print("Moving to new point..");
       generateRandomPoint(&x, &y);
       Serial.print(".");
-      ludicrousGoToPos(refAzimuth+x*circleRadius, refAltitude+y*circleRadius, circleRadius*0.05);
+      Serial.print("refAzimuth: ");
+      Serial.println(refAzimuth);
+      Serial.print("refAltitude: ");
+      Serial.println(refAltitude);
+      Serial.print("circleRadius: ");
+      Serial.println(circleRadius);
+      Serial.print("x: ");
+      Serial.println(x);
+      Serial.print("y: ");
+      Serial.println(y);
+      ludicrousGoToPos(refAzimuth+x*circleRadius, refAltitude+y*circleRadius, circleRadius*0.05, 1.5*circleRadius);
       powah = hyperBeacon(HYPER);
       if (powah > POWER_THRESHOLD) {
-        goodAzms[above_threshold] = celestronGetPos(AZM, false);
-        goodAlts[above_threshold] = celestronGetPos(ALT, false);
+        goodAzms[above_threshold] = x*circleRadius;
+        goodAlts[above_threshold] = y*circleRadius;
         goodPwrs[above_threshold] = powah;
         above_threshold++;
       }
       Serial.println(" Done.");
-      delay(25);
+      //delay(25);
     }
 
     if (above_threshold >= 1) {
@@ -178,16 +188,25 @@ void doCircles(long refAltitude, long refAzimuth, double refRadius) {
 
       for (int i=0; i<above_threshold; i++) {
         mass = goodPwrs[i]-POWER_THRESHOLD;
+        Serial.println(mass);
+        Serial.println(goodAlts[i]);
+        Serial.println(goodAzms[i]);
         tempAlt += mass*goodAlts[i];
         tempAzm += mass*goodAzms[i];
         totalMass += mass;
       }
+      Serial.println("Totalmass");
+      Serial.println(totalMass);
+      Serial.println("tempalt");
+      Serial.println(tempAlt);
+      Serial.println("tempazm");
+      Serial.println(tempAzm);
 
       Serial.println("Moving to new reference center and shrinking radius...");
 
-      refAltitude = tempAlt/totalMass;
-      refAzimuth = tempAzm/totalMass;
-      circleRadius = circleRadius/1.5;
+      refAltitude = refAltitude + tempAlt/totalMass;
+      refAzimuth = refAzimuth + tempAzm/totalMass;
+      circleRadius = circleRadius/1.25;
     } else {
       Serial.println("No good points. Increasing circle radius...");
       circleRadius += 2*initialRadius;
@@ -238,6 +257,13 @@ void calibrateSampling() {
   Serial.print("Now the effective sampling frequency is ");
   Serial.print(EFFECTIVE_SAMPLE_FREQUENCY);
   Serial.println(" Hz.");
+  Serial.println("Calibrating DC offset...");
+  double sum = 0.0;
+  for (int i=0; i<200; i++) {
+    sum += analogRead(SENSOR_PIN);
+    delayMicroseconds(50);
+  }
+  DC_OFFSET = sum/200.0;
 }
 
 void alignBeacon() {
@@ -441,7 +467,8 @@ double getBeaconPower(double *elapsedTime) {
 
   double initialTime = micros();
   for (int i = 0; i < SAMPLE_COUNT; i++) {
-    sample = analogRead(SENSOR_PIN);
+    sample = analogRead(SENSOR_PIN)-DC_OFFSET;
+    //Serial.println(sample);
     totalPower += sample * sample;
 
     realDFT += sample * cos(baseFreq * i);
@@ -453,6 +480,7 @@ double getBeaconPower(double *elapsedTime) {
 
   *elapsedTime = micros() - initialTime;
   //interrupts();
+  //Serial.println((realDFT * realDFT + imagDFT * imagDFT) / (SAMPLE_COUNT * totalPower)*100,5);
   
   return (realDFT * realDFT + imagDFT * imagDFT) / (SAMPLE_COUNT * totalPower);
 

@@ -68,7 +68,7 @@ int highTime = 100; //us
 int lowTime = 100; //us
 int sampleTime = 10; //Should be ~10us less than a factor of lowTime
 int sampleTimeShiftVal = 2; //Rightshifting is much cheaper than dividing; 2^this is how many samples per interval
-int sensorThreshold = 500;
+int sensorThreshold = 15;
 
 int hypersample = 1; //Number of samples to be taken during each sampleSensor() call; this is explicitly intended to be changed during operation
 
@@ -146,6 +146,8 @@ Adafruit_BNO055 bno = Adafruit_BNO055(55);
 #define BUFLEN 64
 #define CHARBUFLEN 10
 
+double BEACON_FREQUENCY = 1000; // Hertz
+
 signed char posBuf[BUFLEN];
 unsigned char charBuf[CHARBUFLEN];
 bool waitMode = false;
@@ -174,6 +176,9 @@ long currentAlt = -1;
 
 long ALTITUDE_OFFSET = 0;
 long AZIMUTH_OFFSET = 0;
+
+IntervalTimer beaconTimer;
+bool BEACON_ON = false;
 
 #include <TimerOne.h>
 #include <TimerThree.h>
@@ -290,6 +295,9 @@ void loop() // run over and over
     if(incomingByte == 'A'){
       alignAFS();
     }
+    if(incomingByte == 'c'){
+      calibrateSampling();
+    }
     if(incomingByte == 'g') {
       alignGPS();
     }
@@ -298,7 +306,14 @@ void loop() // run over and over
       Serial.println(powah);
     }
     if(incomingByte == 'l') {
-      alignBeacon();
+      if (BEACON_ON) {
+        beaconTimer.end();
+        BEACON_ON = false;
+      } else {
+        beaconTimer.begin(laserBeacon, 1000000 / (2 * BEACON_FREQUENCY));
+        BEACON_ON = true;
+      }
+      //alignBeacon();
     }
 
     if(incomingByte == '|'){
