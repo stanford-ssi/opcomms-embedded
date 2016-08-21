@@ -36,6 +36,13 @@ double EARTH_FLATTENING = 1/298.257223563;
 
 bool beaconState = true;
 
+double SKYLINE_LAT = 37.3239723;
+double SKYLINE_LON = -122.2042262;
+double SKYLINE_ELEV = 718.2;
+double DISH_LAT = 37.402861;
+double DISH_LON = -122.165556;
+double DISH_ELEV = 151.5;
+
 /*
  * Main function to align each receiver. Both Rosencrantz and Guildenstern should run it at the same time.
  */
@@ -44,26 +51,26 @@ void alignAFS() {
   calibrateSampling();
 
   // Perform rough GPS align.
-  Serial.println("Press q to quit anytime. Where do you want to point? [e for EPC, l for lake, c for custom, q for quit, s for skip]");
+  Serial.println("Press q to quit anytime. Where do you want to point? [k for SKyline, d for Dish, q for quit, s for skip]");
   while (!Serial.available());
   char c = Serial.read();
   double tgtLat, tgtLon, tgtAlt, srcLat, srcLon, srcAlt;
   if (c == 'q') return;
-  if (c == 'l') {
-    tgtLat = 37.423027;
-    tgtLon = -122.174073;
-    tgtAlt = 39.5;
-    srcLat = 37.424111;
-    srcLon = -122.177821;
-    srcAlt = 44;
+  if (c == 'k') {
+    tgtLat = SKYLINE_LAT;
+    tgtLon = SKYLINE_LON;
+    tgtAlt = SKYLINE_ELEV;
+    srcLat = DISH_LAT;
+    srcLon = DISH_LON;
+    srcAlt = DISH_ELEV;
   }
-  if (c == 'e') {
-    tgtLat = 37.424111;
-    tgtLon = -122.177821;
-    tgtAlt = 44;
-    srcLat = 37.423027;
-    srcLon = -122.174073;
-    srcAlt = 39.5;
+  if (c == 'd') {
+    tgtLat = DISH_LAT;
+    tgtLon = DISH_LON;
+    tgtAlt = DISH_ELEV;
+    srcLat = SKYLINE_LAT;
+    srcLon = SKYLINE_LON;
+    srcAlt = SKYLINE_ELEV;
   }
   if (c == 'c') {
     Serial.println("I'm sorry, Dave. I'm afraid I can't do that. [Read: I'm too lazy to implement this.]");
@@ -416,9 +423,9 @@ void coarseGPSalign(double srcLat, double srcLon, double srcAlt, double tgtLat, 
   Serial.println(pointAlt);
   pointAzm = wrapAround(pointAzm);
   pointAlt = wrapAround(pointAlt);
-  celestronGoToPos(pointAzm, pointAlt);
   Serial.println(pointAzm);
   Serial.println(pointAlt);
+  celestronGoToPos(pointAzm, pointAlt);
 }
 
 void simplexSearch(double alt0, double az0) {
