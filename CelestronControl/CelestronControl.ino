@@ -14,7 +14,6 @@
  *
  *  <value> means that value is sent, with no spaces or < > characters
  *
- *  H<number> - engages hypersampling mode, which averages the specified number of samples before returning a value. "H1" returns the system to normal behavior
  *  Q - Returns Azimuth Position <space> Altitude Position <space> Voltage on Analog 0 (connected to sensor)
  *  Z - Returns Azimuth Position <space> Altitude Position <space> Voltage on Analog 0 (connected to sensor), with no error checking on position from the arm
  *  S - Returns only voltage on Analog 0 (connected to sensor)
@@ -68,10 +67,8 @@ int highTime = 100; //us
 int lowTime = 100; //us
 int sampleTime = 10; //Should be ~10us less than a factor of lowTime
 int sampleTimeShiftVal = 2; //Rightshifting is much cheaper than dividing; 2^this is how many samples per interval
-int sensorThreshold = 15;
-
+int sensorThreshold = 500;
 int hypersample = 1; //Number of samples to be taken during each sampleSensor() call; this is explicitly intended to be changed during operation
-
 #define WAIT_FOR_MSG_TIMEOUT 500000 //us
 
 char msgBuf[MSG_BUF_LEN];
@@ -159,7 +156,7 @@ bool receiveMode = false;
 bool saveCoefficientsEnabled = false; //Dangerous; safety must be disabled prior to attempting
 bool loadCoefficientsEnabled = false; //Dangerous; safety must be disabled prior to attempting
 
-bool bnoEnabled = true; //True by default; if fails to enable, will be set to false. Initialize to false to completely disable
+bool bnoEnabled = false; //True by default; if fails to enable, will be set to false. Initialize to false to completely disable
 #define IMU_GOTO_MAX_RECURSIONS 1
 double imuAzmOffset = 0.0;
 double imuAltOffset = 0.0;
@@ -179,6 +176,11 @@ long AZIMUTH_OFFSET = 0;
 
 IntervalTimer beaconTimer;
 bool BEACON_ON = false;
+// CALIBRATION MEASUREMENT VARIABLES 
+double mean, mean0, mean1, var, var0, var1, stdev, stdev0, stdev1;
+static const int calibration_buffer_length = 1024;
+int calibration_buffer[calibration_buffer_length] = {0};
+float decision_threshold = 1023; // SET WITH MEASURE FIRST
 
 #include <TimerOne.h>
 #include <TimerThree.h>
@@ -193,7 +195,7 @@ void setup()
   Timer1.attachInterrupt(transmit_timer_tick);
   Timer1.stop();
   
-  Timer3.initialize(11);
+  Timer3.initialize(100/5);
   Timer3.attachInterrupt(receive_interrupt);
   Timer3.stop();
 
@@ -276,7 +278,6 @@ void loop() // run over and over
     if(incomingByte == 'D') celestronDriveMotor(DOWN, globalSpeed);
     if(incomingByte == 'R') celestronDriveMotor(RIGHT, globalSpeed);
     if(incomingByte == 'X') celestronStopCmd(false);
-
     if(incomingByte == 'S') Serial.println(sampleSensor());
     if(incomingByte == 'G') celestronGoToPos(Serial.parseInt(),Serial.parseInt());
     if(incomingByte == 'z') ludicrousGoToPos(Serial.parseInt(),Serial.parseInt(),100);
@@ -395,6 +396,7 @@ void loop() // run over and over
       } else {
         receiveMode = true;
         Timer3.start();
+        //interrupts();
         Serial.println("receiveMode ON");
       }
      /* Serial.println("Waiting for msg:");
@@ -414,6 +416,82 @@ void loop() // run over and over
       while(!Serial.available()) ledParty();
       ledColor(LED_OFF);
     }
+
+    // CALIBRATION MEASUREMENTS FOR DECISION THRESHOLDING
+    // MEASURES MEAN AND VARIANCE OF ON AND OFF SIGNALS TO SET PROPER DECISION THRESHOLD
+    // Michael Taylor and Eldrick Millares, Aug 19th 2016
+    if(incomingByte == 'C'){
+      // DO THINGS 
+      Serial.println("Calibration measurements mode. Measure signal levels with incoming laser \"on\" and \"off\" to set proper decision threshold.");
+      Serial.println("When measuring \"off\" ensure aperture is uncovered (will include background light).");
+      Serial.println("When measuring \"on\" do not modulate the incoming laser.");
+
+      do{
+        Serial.println("Enter 0 to measure with the beam off, 1 to measure with the beam on. Enter q to quit.");
+        while (Serial.available() == 0);
+        incomingByte = Serial.read();
+        if(incomingByte == 'q'){
+          Serial.println("Quitting.");
+          //break;
+        } else if(incomingByte == '0' || incomingByte == '1') {
+          // Stop Rx sampling timer
+          Serial.println("Stopping Rx sampling timer.");
+          Timer3.stop();
+          noInterrupts();
+          
+          Serial.println("Acquiring samples. Please wait.");
+          for (int i = 0 ; i < calibration_buffer_length ; i++){
+            calibration_buffer[i] = analogRead(SENSOR_PIN);
+            // dont care about efficiency or idle time here, just want to get the samples and use them to calculate mean and variance
+            delayMicroseconds(20);
+          }
+          Serial.println("Samples Acquired. Calculating mean.");
+          // mean calculation
+          mean = 0;
+          for (int i = 0 ; i<calibration_buffer_length ; i++){
+            mean = mean + calibration_buffer[i];
+          }
+          mean = mean/calibration_buffer_length;
+
+          if(incomingByte == '0'){
+            mean0 = mean;
+          } else if(incomingByte == '1'){
+            mean1 = mean;
+          }
+          Serial.println(mean);
+          
+          Serial.println("Calculating Variance");
+          var = 0;
+          stdev = 0;
+          // variance calculation
+          // differences from mean squared and averaged  (1/n-1 samples for unbiased estimator)
+          // sum of differences from mean
+          for(int i=0 ; i<calibration_buffer_length ; i++){
+            var = var + (calibration_buffer[i]-mean)*(calibration_buffer[i]-mean);
+          }
+          // averaged
+          var = var/(calibration_buffer_length - 1);
+          stdev = sqrt(var);
+          if(incomingByte == '0'){
+            var0 = var;
+            stdev0 = stdev;
+          } else if(incomingByte == '1'){
+            var1 = var;
+            stdev1 = stdev;
+          } 
+          Serial.println(var);
+          Serial.println(stdev);
+        }
+
+        decision_threshold = (stdev0*mean1+stdev1*mean0)/(stdev1+stdev0);
+        Serial.println("Decision Threashold:");
+        Serial.println(decision_threshold);
+
+        Serial.println("Restarting Interrupts (Timer3 stopped).");
+        interrupts();
+        
+      }while(incomingByte != 'q');  
+    }
   }
 
   if(!transmitting) digitalWrite(LASER,beamHold ? HIGH : LOW); //AAAAAH THIS LINE WAS HIDING AND COST ME A WHOLE DAY OF MY LIFE. WHY CRUEL WORLD? Must be disabled for hardware interrupts. 
@@ -424,18 +502,18 @@ void loop() // run over and over
     delay(500);
   }
 
-  if(waitMode){
-    while(Serial.available()) Serial.read(); //For no obvious reason, not clearing the Serial buffer prior to listening causes weird timing bugs
-    int charsRead = listen_for_msg();
-
-    if(charsRead != -1){
-      Serial.println(charsRead);
-      Serial.print(msgBuf);
-      clearMsgBuf();
-    }else{
-        Serial.println(0);
-    }
-  }
+//  if(waitMode){
+//    while(Serial.available()) Serial.read(); //For no obvious reason, not clearing the Serial buffer prior to listening causes weird timing bugs
+//    int charsRead = listen_for_msg();
+//
+//    if(charsRead != -1){
+//      Serial.println(charsRead);
+//      Serial.print(msgBuf);
+//      clearMsgBuf();
+//    }else{
+//        Serial.println(0);
+//    }
+//  }
 
 
   if(vomitData){
@@ -444,6 +522,7 @@ void loop() // run over and over
 }
 
 int sampleSensor(){
+  noInterrupts();
   long sumOfSamples; //hacky solution to allow many samples to be safely added together before averaging
 
   for(int samples = 0; samples < hypersample; samples++){
@@ -454,7 +533,6 @@ int sampleSensor(){
   int averagedValue = hypersample > 1 ? sumOfSamples/(long(hypersample)) : sumOfSamples; //Use longs to try and get more precision
 
   if(hypersample < 1) blinkLED(500); //Indicate hypersample is out of spec and is being ignored
-
+  interrupts();
   return averagedValue;
 }
-
