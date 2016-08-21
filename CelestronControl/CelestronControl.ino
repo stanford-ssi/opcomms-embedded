@@ -156,7 +156,7 @@ bool receiveMode = false;
 bool saveCoefficientsEnabled = false; //Dangerous; safety must be disabled prior to attempting
 bool loadCoefficientsEnabled = false; //Dangerous; safety must be disabled prior to attempting
 
-bool bnoEnabled = false; //True by default; if fails to enable, will be set to false. Initialize to false to completely disable
+bool bnoEnabled = true; //True by default; if fails to enable, will be set to false. Initialize to false to completely disable
 #define IMU_GOTO_MAX_RECURSIONS 1
 double imuAzmOffset = 0.0;
 double imuAltOffset = 0.0;
